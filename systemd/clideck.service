@@ -1,0 +1,18 @@
+[Unit]
+Description=CliDeck local AI agent dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/root/.opencode/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/clideck --host 0.0.0.0 --port 4000
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
