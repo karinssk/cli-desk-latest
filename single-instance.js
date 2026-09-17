@@ -1,5 +1,6 @@
 const { existsSync, readFileSync, writeFileSync, unlinkSync } = require('fs');
 const { join } = require('path');
+const { connect } = require('net');
 const { DATA_DIR } = require('./paths');
 const { PORT, HOST, localUrl } = require('./runtime');
 
@@ -31,9 +32,19 @@ function removeLockIfOwned() {
   try { unlinkSync(LOCK_PATH); } catch {}
 }
 
-function acquireServerLock() {
+function isServerReachable(lock) {
+  return new Promise(resolve => {
+    const socket = connect({ host: lock.host === '0.0.0.0' ? '127.0.0.1' : lock.host, port: lock.port });
+    socket.setTimeout(500);
+    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('error', () => resolve(false));
+    socket.once('timeout', () => { socket.destroy(); resolve(false); });
+  });
+}
+
+async function acquireServerLock() {
   const existing = readLock();
-  if (existing && existing.pid !== process.pid && isPidAlive(existing.pid)) {
+  if (existing && existing.pid !== process.pid && isPidAlive(existing.pid) && await isServerReachable(existing)) {
     return { ok: false, lock: existing };
   }
 
@@ -48,4 +59,4 @@ function acquireServerLock() {
   return { ok: true, lock };
 }
 
-module.exports = { acquireServerLock, removeLockIfOwned, isPidAlive, LOCK_PATH };
+module.exports = { acquireServerLock, removeLockIfOwned, isPidAlive, isServerReachable, LOCK_PATH };

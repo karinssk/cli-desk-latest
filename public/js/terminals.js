@@ -741,6 +741,17 @@ export function addTerminal(id, name, themeId, commandId, projectId, muted, last
 
   term.open(el);
   const onPaste = (e) => {
+    const image = [...(e.clipboardData?.items || [])].find(item => item.type.startsWith('image/'))?.getAsFile();
+    if (image) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (image.size > 10 * 1024 * 1024) return showToast('Clipboard image is larger than 10 MB.', { type: 'error' });
+      const reader = new FileReader();
+      reader.onload = () => send({ type: 'clipboard.image', id, mime: image.type, data: String(reader.result).split(',', 2)[1] });
+      reader.onerror = () => showToast('Could not read clipboard image.', { type: 'error' });
+      reader.readAsDataURL(image);
+      return;
+    }
     const text = e.clipboardData?.getData('text/plain') || '';
     if (!text) return;
     e.preventDefault();

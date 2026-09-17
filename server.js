@@ -48,10 +48,10 @@ function checkSelfUpdate() {
   });
 }
 
-checkSelfUpdate().then(() => {
+checkSelfUpdate().then(async () => {
 
 const { acquireServerLock, removeLockIfOwned } = require('./single-instance');
-const serverLock = acquireServerLock();
+const serverLock = await acquireServerLock();
 if (!serverLock.ok) {
   const url = serverLock.lock?.url || `http://127.0.0.1:${serverLock.lock?.port || PORT}`;
   const hint = terminalLink(url);
@@ -294,7 +294,7 @@ const server = http.createServer((req, res) => {
   if (!filePath.startsWith(PUBLIC_ROOT) && !ALIASES[req.url]) return res.writeHead(403).end();
   if (!existsSync(filePath)) return res.writeHead(404).end();
   try {
-    res.writeHead(200, { 'Content-Type': MIME[extname(filePath)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME[extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(readFileSync(filePath));
   } catch { res.writeHead(500).end(); }
 });

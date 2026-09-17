@@ -1,5 +1,6 @@
 const { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync } = require('fs');
 const { join, dirname } = require('path');
+const { randomUUID } = require('crypto');
 const { execFileSync, execFile } = require('child_process');
 const os = require('os');
 const config = require('./config');
@@ -9,6 +10,27 @@ const presets = JSON.parse(readFileSync(join(__dirname, 'agent-presets.json'), '
 const { listDirs, binName, defaultShell } = require('./utils');
 const { presetForCommand: findPresetForCommand, menuStartsWork } = require('./preset-utils');
 const { PORT } = require('./runtime');
+const { DATA_DIR } = require('./paths');
+
+const CLIPBOARD_IMAGE_TYPES = {
+  'image/png': ['png', Buffer.from([0x89, 0x50, 0x4e, 0x47])],
+  'image/jpeg': ['jpg', Buffer.from([0xff, 0xd8, 0xff])],
+  'image/gif': ['gif', Buffer.from('GIF8')],
+  'image/webp': ['webp', Buffer.from('RIFF')],
+};
+
+function saveClipboardImage(mime, base64) {
+  const type = CLIPBOARD_IMAGE_TYPES[mime];
+  if (!type || typeof base64 !== 'string' || base64.length > 14_000_000) throw new Error('Unsupported image or image is larger than 10 MB');
+  const data = Buffer.from(base64, 'base64');
+  if (!data.length || data.length > 10 * 1024 * 1024 || !data.subarray(0, type[1].length).equals(type[1])) throw new Error('Invalid clipboard image');
+  if (mime === 'image/webp' && data.subarray(8, 12).toString() !== 'WEBP') throw new Error('Invalid clipboard image');
+  const dir = join(DATA_DIR, 'clipboard-images');
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, `clipboard-${Date.now()}-${randomUUID().slice(0, 8)}.${type[0]}`);
+  writeFileSync(path, data, { flag: 'wx' });
+  return path;
+}
 for (const p of presets) if (p.presetId === 'shell') p.command = defaultShell;
 function isPresetEnabled(preset) {
   if (!preset?.enabledIfEnv) return true;
@@ -346,6 +368,17 @@ function onConnection(ws) {
       case 'session.resume':  sessions.resume(msg, ws, cfg); break;
       case 'session.restart': console.log('[handler] session.restart', msg.id); sessions.restart(msg, ws, cfg); break;
       case 'input':                sessions.input(msg); break;
+      case 'clipboard.image': {
+        try {
+          if (!sessions.getSessions().has(msg.id)) throw new Error('Session is no longer available');
+          const path = saveClipboardImage(msg.mime, msg.data);
+          sessions.input({ id: msg.id, data: path });
+          ws.send(JSON.stringify({ type: 'clipboard.image.result', path }));
+        } catch (err) {
+          ws.send(JSON.stringify({ type: 'error', message: err.message }));
+        }
+        break;
+      }
       case 'session.statusReport':
         if (sessions.getSessions().has(msg.id)) {
           sessions.broadcast({ type: 'session.status', id: msg.id, working: !!msg.working, source: 'client' });
@@ -978,4 +1011,4 @@ function removeTelemetryConfig(preset, cmd = null) {
 
 function getConfig() { return cfg; }
 
-module.exports = { onConnection, getConfig };
+module.exports = { onConnection, getConfig, saveClipboardImage };
