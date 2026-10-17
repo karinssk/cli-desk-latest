@@ -3,6 +3,7 @@
 // (for resume) and detect whether telemetry is configured (setup prompts).
 
 const { updateClaudeSessionToken } = require('./claude-session');
+const monitor = require('./session-monitor');
 
 const activity = new Map(); // sessionId → has received events
 const lastEvent = new Map(); // sessionId → last OTEL event name (+ kind)
@@ -115,6 +116,7 @@ function handleLogs(req, res) {
       for (const lr of sl.logRecords || []) {
         const attrs = parseAttrs(lr.attributes);
         const eventName = attrs['event.name'];
+        if (sess) monitor.telemetry(sess, resolvedId, attrs, broadcastFn);
 
         // Debug telemetry logs — uncomment as needed, do not delete
         // if (serviceName === 'claude-code' && eventName) console.log(`[telemetry:claude] ${eventName}`);

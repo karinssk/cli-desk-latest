@@ -14,41 +14,7 @@ function openUrlHint() {
   return process.platform === 'darwin' ? 'Cmd+click to open' : 'Ctrl+click to open';
 }
 
-// --- Self-update check (runs before server starts) ---
-const currentVersion = require('./package.json').version;
-const { execFile, execSync } = require('child_process');
-const shellOpt = process.platform === 'win32';
-
-function checkSelfUpdate() {
-  return new Promise(ok => {
-    // Skip in non-interactive or local dev contexts
-    if (!process.stdin.isTTY || !process.stdout.isTTY) return ok();
-    if (!__dirname.includes(join('node_modules', 'clideck'))) return ok();
-    execFile('npm', ['view', 'clideck', 'version'], { shell: shellOpt, timeout: 10000 }, (err, stdout) => {
-      if (err) return ok();
-      const latest = stdout.trim();
-      if (!latest || latest === currentVersion) return ok();
-      const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
-      rl.question(`\n\x1b[38;5;105m  Update available:\x1b[0m \x1b[38;5;245m${currentVersion}\x1b[0m → \x1b[38;5;44m${latest}\x1b[0m\n\n  \x1b[38;5;252mUpdate now? [Y/n]\x1b[0m `, answer => {
-        rl.close();
-        if (answer.trim().toLowerCase() === 'n') return ok();
-        console.log('\n  \x1b[38;5;245mUpdating...\x1b[0m\n');
-        try {
-          execSync('npm install -g clideck', { stdio: 'inherit', shell: true });
-          console.log('\n  \x1b[38;5;44mUpdated to v' + latest + '. Restarting...\x1b[0m\n');
-          const { spawn } = require('child_process');
-          spawn(process.argv[0], process.argv.slice(1), { stdio: 'inherit', shell: shellOpt }).on('close', code => process.exit(code));
-          return;
-        } catch {
-          console.log('\n  \x1b[38;5;196mUpdate failed.\x1b[0m Continuing with v' + currentVersion + '.\n');
-          ok();
-        }
-      });
-    });
-  });
-}
-
-checkSelfUpdate().then(async () => {
+(async () => {
 
 const { acquireServerLock, removeLockIfOwned } = require('./single-instance');
 const serverLock = await acquireServerLock();
@@ -261,6 +227,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.url === '/api/master/sessions' || req.url === '/api/master/continue') {
+    require('./session-master').handleHttp(req, res, sessions);
+    return;
+  }
+
   // Session-to-session ask bridge used by the `clideck ask` CLI command.
   if (req.method === 'POST' && req.url === '/api/session/ask') {
     require('./session-ask').handleHttp(req, res, sessions, () => config.load());
@@ -294,8 +265,9 @@ const server = http.createServer((req, res) => {
   if (!filePath.startsWith(PUBLIC_ROOT) && !ALIASES[req.url]) return res.writeHead(403).end();
   if (!existsSync(filePath)) return res.writeHead(404).end();
   try {
+    const content = readFileSync(filePath);
     res.writeHead(200, { 'Content-Type': MIME[extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
-    res.end(readFileSync(filePath));
+    res.end(content);
   } catch { res.writeHead(500).end(); }
 });
 
@@ -359,4 +331,4 @@ server.listen(PORT, HOST, () => {
 ${HOST !== '127.0.0.1' ? '\x1b[38;5;208m  ▸ Warning: listening on ' + HOST + ' — no authentication, anyone on the network can connect\x1b[0m\n' : ''}`);
 });
 
-}); // checkSelfUpdate
+})();

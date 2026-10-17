@@ -9,6 +9,7 @@ function usage() {
     'Usage:',
     '  clideck [--host <host>] [--port <port>]',
     '  clideck agents [--json] [--all]',
+    '  clideck master --today [--recover --all | --recover --session <id>]',
     '  clideck ask status [--json] [--all]',
     '  clideck ask --session <name-or-id> --message <text> [--timeout 10m]',
     '',
@@ -66,7 +67,9 @@ function usage() {
   ].join('\n');
 }
 
-if (args[0] === 'agents') {
+if (args[0] === 'master') {
+  require('../clideck-master-cli').run(args.slice(1));
+} else if (args[0] === 'agents') {
   require('../clideck-agents-cli').run(args.slice(1));
 } else if (args[0] === 'ask') {
   require('../clideck-ask-cli').run(args.slice(1));

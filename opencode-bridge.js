@@ -4,6 +4,7 @@
 
 // sessionId → { opencodeSessionId, cwd }
 const watchers = new Map();
+const monitor = require('./session-monitor');
 
 let broadcastFn = null;
 let sessionsFn = null;
@@ -13,9 +14,9 @@ function init(broadcast, getSessions) {
   sessionsFn = getSessions;
 }
 
-function watchSession(sessionId, cwd) {
+function watchSession(sessionId, cwd, savedToken) {
   if (watchers.has(sessionId)) return;
-  watchers.set(sessionId, { opencodeSessionId: null, cwd });
+  watchers.set(sessionId, { opencodeSessionId: savedToken || null, cwd, verified: !!savedToken });
 }
 
 function findByOcId(ocSid) {
@@ -39,7 +40,6 @@ function findUnclaimed(directory) {
 function extractOcSid(p) {
   return p.sessionID
     || p.sessionId
-    || p.info?.id
     || p.info?.sessionID
     || p.info?.sessionId
     || p.part?.sessionID
@@ -47,6 +47,7 @@ function extractOcSid(p) {
     || p.message?.sessionID
     || p.message?.sessionId
     || p.session?.id
+    || ((p.event === 'session.created' || p.event === 'session.updated') ? p.info?.id : null)
     || null;
 }
 
@@ -54,10 +55,11 @@ function extractDirectory(p) {
   return p.info?.directory || p.directory || p.info?.path?.cwd || p.path?.cwd || null;
 }
 
-function claim(sessionId, ocSid) {
+function claim(sessionId, ocSid, verified = false) {
   const w = watchers.get(sessionId);
   if (!w) return;
   w.opencodeSessionId = ocSid;
+  w.verified = verified;
   const sess = sessionsFn?.()?.get(sessionId);
   if (sess && !sess.sessionToken) sess.sessionToken = ocSid;
 }
@@ -74,7 +76,42 @@ function handleEvent(payload) {
   if (!payload || !payload.event) return;
 
   const ocSid = extractOcSid(payload);
-  let sessionId = ocSid ? findByOcId(ocSid) : null;
+  const direct = typeof payload.clideckSessionId === 'string' && watchers.has(payload.clideckSessionId)
+    ? payload.clideckSessionId : null;
+  const topSessionEvent = (payload.event === 'session.created' || payload.event === 'session.updated') && !payload.info?.parentID;
+  if (direct && !topSessionEvent && (payload.event === 'session.created' || payload.event === 'session.updated')) return; // subagent session
+  if (direct && ocSid) {
+    const owner = findByOcId(ocSid);
+    const watcher = watchers.get(direct);
+    // ponytail: a tagged top-level creation is treated as /new in this PTY;
+    // an explicit foreground-session event would remove that assumption.
+    const newTopLevel = watcher.verified && watcher.opencodeSessionId !== ocSid && payload.event === 'session.created' && topSessionEvent;
+    if (watcher.verified && watcher.opencodeSessionId !== ocSid && !newTopLevel) return;
+    if (!watcher.verified && !topSessionEvent) return;
+    if (owner && owner !== direct) {
+      const previous = watchers.get(owner);
+      if (previous.verified) return;
+      previous.opencodeSessionId = null;
+      const oldSession = sessionsFn?.()?.get(owner);
+      if (oldSession?.sessionToken === ocSid) oldSession.sessionToken = null;
+    }
+    if (watcher.opencodeSessionId !== ocSid) {
+      if (newTopLevel) {
+        const session = sessionsFn?.()?.get(direct);
+        if (session) {
+          session.monitor = {};
+          session._monitorMessages = new Map();
+          session.working = undefined;
+          broadcastFn?.({ type: 'session.monitor', id: direct, monitor: {}, statusKnown: false });
+        }
+      }
+      claim(direct, ocSid, true);
+      const session = sessionsFn?.()?.get(direct);
+      if (session) session.sessionToken = ocSid;
+    } else watcher.verified = true;
+  }
+  if (direct && !watchers.get(direct).verified) return;
+  let sessionId = direct && watchers.get(direct).verified ? direct : (ocSid ? findByOcId(ocSid) : null);
 
   // Claim unclaimed watcher on session.created or session.updated
   if (!sessionId && ocSid && (payload.event === 'session.created' || payload.event === 'session.updated')) {
@@ -93,6 +130,9 @@ function handleEvent(payload) {
   }
 
   if (!sessionId) return;
+
+  const sess = sessionsFn?.()?.get(sessionId);
+  if (sess && watchers.get(sessionId)?.verified) monitor.openCode(sess, sessionId, payload, broadcastFn);
 
   // session.status → busy/idle
   if (payload.event === 'session.status') {

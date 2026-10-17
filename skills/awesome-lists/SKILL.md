@@ -63,7 +63,7 @@ Run this in a batch for all candidates. Sort by stars descending.
 
 **Check our repo stats too:**
 ```bash
-gh api repos/rustykuntz/clideck --jq '{stars: .stargazers_count, created: .created_at}'
+gh api repos/karinssk/cli-desk-latest --jq '{stars: .stargazers_count, created: .created_at}'
 ```
 
 Compare against each list's requirements (some need 20+ stars, 90+ days, 100+ stars, etc).
@@ -97,14 +97,14 @@ For each target repo:
 gh repo fork OWNER/REPO --clone=false
 
 # Sync fork
-gh repo sync rustykuntz/FORK
+gh repo sync karinssk/FORK
 
 # Create branch
-SHA=$(gh api repos/rustykuntz/FORK/git/ref/heads/main --jq '.object.sha')
-gh api repos/rustykuntz/FORK/git/refs -f ref=refs/heads/add-clideck -f sha="$SHA"
+SHA=$(gh api repos/karinssk/FORK/git/ref/heads/main --jq '.object.sha')
+gh api repos/karinssk/FORK/git/refs -f ref=refs/heads/add-clideck -f sha="$SHA"
 
 # Get file content and SHA
-gh api -X GET repos/rustykuntz/FORK/contents/README.md --field ref=add-clideck --jq '.sha'
+gh api -X GET repos/karinssk/FORK/contents/README.md --field ref=add-clideck --jq '.sha'
 ```
 
 To edit and upload via API (avoids cloning):
@@ -115,7 +115,7 @@ To edit and upload via API (avoids cloning):
 4. Push via Contents API:
 
 ```bash
-gh api repos/rustykuntz/FORK/contents/README.md \
+gh api repos/karinssk/FORK/contents/README.md \
   -X PUT \
   -f message="Add clideck to SECTION_NAME" \
   -f content="$ENCODED" \
@@ -125,13 +125,13 @@ gh api repos/rustykuntz/FORK/contents/README.md \
 
 5. **Always verify** the edit before creating the PR:
 ```bash
-gh api -X GET repos/rustykuntz/FORK/contents/README.md --field ref=add-clideck --jq '.content' | base64 -d | grep -B2 -A2 "clideck"
+gh api -X GET repos/karinssk/FORK/contents/README.md --field ref=add-clideck --jq '.content' | base64 -d | grep -B2 -A2 "clideck"
 ```
 
 6. Create PR matching the repo's requirements:
 ```bash
 gh pr create --repo OWNER/REPO \
-  --head rustykuntz:add-clideck \
+  --head karinssk:add-clideck \
   --title "TITLE MATCHING THEIR FORMAT" \
   --body "BODY WITH THEIR CHECKLIST/TEMPLATE"
 ```

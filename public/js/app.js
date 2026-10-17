@@ -1,4 +1,5 @@
 import { state, send, flushQueuedSends } from './state.js';
+import { setSessionMonitor } from './monitor-sidebar.js';
 import { esc, binName, resolveIconPath, randomUUID } from './utils.js';
 import { addTerminal, removeTerminal, select, startRename, startProjectRename, setSessionTheme, openMenu, closeMenu, setStatus, updateMuteIndicator, updatePreview, markUnread, applyFilter, setTab, renderResumable, regroupSessions, toggleProjectCollapse, setSessionProject, estimateSize, restartComplete, positionMenu, addPill, updatePill, removePill, appendPillLog, setPillLogs, closePillLog, addTerminalInputAction, removeTerminalInputActionsForPlugin, trackTerminalInputData, copySessionName } from './terminals.js';
 import { renderSettings, updateVersionFooter } from './settings.js';
@@ -106,7 +107,11 @@ function connect() {
           for (const id of [...state.terms.keys()]) {
             if (!liveIds.has(id)) removeTerminal(id);
           }
-          msg.list.forEach(s => addTerminal(s.id, s.name, s.themeId, s.commandId, s.projectId, s.muted, s.lastPreview, s.presetId, s.working));
+          msg.list.forEach(s => {
+            addTerminal(s.id, s.name, s.themeId, s.commandId, s.projectId, s.muted, s.lastPreview, s.presetId, s.working);
+            setSessionMonitor(s.id, s.monitor || {}, s.cwd, !!s.statusKnown);
+            if (s.statusKnown) setStatus(s.id, s.working);
+          });
           if (!state.active || !state.terms.has(state.active)) {
             const savedActive = localStorage.getItem('clideck.activeSessionId');
             const nextId = savedActive && liveIds.has(savedActive) ? savedActive : msg.list[0]?.id;
@@ -117,6 +122,7 @@ function connect() {
       case 'created':
         expandProjectForNewSession(msg.projectId);
         if (!state.terms.has(msg.id)) addTerminal(msg.id, msg.name, msg.themeId, msg.commandId, msg.projectId, msg.muted, msg.lastPreview, msg.presetId, msg.working);
+        setSessionMonitor(msg.id, {}, msg.cwd, false);
         select(msg.id);
         applyFilter();
         closeMobileSidebar();
@@ -134,7 +140,11 @@ function connect() {
         break;
       case 'session.restarted':
         console.log('[restart] got session.restarted from server', msg);
+        if (!msg.error) setSessionMonitor(msg.id, {}, undefined, false);
         restartComplete(msg.id, msg);
+        break;
+      case 'session.monitor':
+        setSessionMonitor(msg.id, msg.monitor, undefined, msg.statusKnown);
         break;
       // Telemetry/bridge working/idle
       case 'session.status':

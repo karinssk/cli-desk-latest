@@ -8,14 +8,9 @@
   },
   "scripts": {
     "start": "node server.js",
+    "test": "node tests/single-instance.test.js && node tests/clipboard-image.test.js && node tests/session-monitor.test.js && node tests/session-master.test.js && node tests/master-monitor.test.js",
     "build:css": "tailwindcss -i src/input.css -o public/tailwind.css --minify",
-    "prepublishOnly": "npm run build:css",
-    "smoke:providers": "node tests/providers/run.js",
-    "smoke:menu": "node tests/providers/menu-detection.test.js",
-    "smoke:capture": "node tests/providers/antigravity-capture.test.js",
-    "smoke:menu-status": "node tests/providers/menu-status.test.js",
-    "smoke:codex-config": "node tests/providers/codex-config.test.js",
-    "smoke:codex-hooks": "node tests/providers/codex-hooks.test.js"
+    "prepublishOnly": "npm run build:css"
   },
   "keywords": [
     "terminal",
@@ -35,9 +30,10 @@
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rustykuntz/clideck.git"
+    "url": "git+https://github.com/karinssk/cli-desk-latest.git"
   },
-  "homepage": "https://clideck.dev/",
+  "homepage": "https://github.com/karinssk/cli-desk-latest#readme",
+  "bugs": { "url": "https://github.com/karinssk/cli-desk-latest/issues" },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

@@ -7,10 +7,10 @@
 <p align="center">
   one screen for AI coding agents.
   <br><br>
-  <a href="https://clideck.dev">Website</a> · <a href="https://docs.clideck.dev">Docs</a> · <a href="https://youtu.be/hICrtjGAeDk">Demo</a> · <a href="https://www.npmjs.com/package/clideck"><img src="https://img.shields.io/npm/v/clideck" alt="npm version"></a>
+  <a href="https://github.com/karinssk/cli-desk-latest">Repository</a> · <a href="https://github.com/karinssk/cli-desk-latest/issues">Issues</a> · <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-> Personal deployment fork for `karinssk`. It includes the local Claude launcher
+> Maintained by `karinssk` at [cli-desk-latest](https://github.com/karinssk/cli-desk-latest). It includes the local Claude launcher
 > and systemd service templates in `bin/` and `systemd/`; private session data is excluded.
 
 <!-- TODO: Replace with a ~10 second GIF showing: open clideck,
@@ -34,25 +34,27 @@ A pane grid is flat. agent work usually is not. projects, previews, timestamps, 
 ## Quick start
 
 ```bash
-npm install -g clideck
-clideck
+git clone https://github.com/karinssk/cli-desk-latest.git
+cd cli-desk-latest
+npm ci
+npm start
 ```
 
 Open [localhost:4000](http://localhost:4000). Click **+**, pick an agent, start working.
 
-Or just run it once with `npx clideck`. Node 18+. Works on macOS, Linux, and Windows 10 1809+.
+Node 18+. Works on macOS, Linux, and Windows 10 1809+. Use `node bin/clideck.js` for CLI commands, or run `npm link` to make `clideck` available locally.
 
 Linux ships prebuilt binaries for glibc x64 and arm64, so nothing compiles. Other Linux setups need to build node-pty from source:
 
 ```bash
 # Debian/Ubuntu on an architecture with no prebuilt binary
-sudo apt-get install -y build-essential python3 && npm install -g clideck --allow-scripts=node-pty
+sudo apt-get install -y build-essential python3 && npm ci
 
 # Alpine/musl - a glibc prebuild does exist, so the source build has to be forced
-apk add python3 make g++ && npm_config_build_from_source=true npm install -g clideck --allow-scripts=node-pty
+apk add python3 make g++ && npm_config_build_from_source=true npm ci
 ```
 
-Hit a problem on Linux? [open an issue](https://github.com/rustykuntz/clideck/issues).
+Hit a problem? [Open an issue](https://github.com/karinssk/cli-desk-latest/issues).
 
 If port `4000` is already in use:
 
@@ -90,6 +92,20 @@ If project or session names contain spaces, quote the whole target. The target i
 
 **Mobile remote** - the agents keep running on the local machine. status, prompts, history, and replies stay available from a phone while away. E2E encrypted, no account needed.
 
+**Master terminal monitor** - watch sessions active today across projects from a separate terminal:
+
+```bash
+clideck master --today
+# Permit recovery of today's agents after a settled Bad Request error:
+clideck master --today --recover --all
+# Or select one exact session ID printed by the monitor:
+clideck master --today --recover --session <id>
+```
+
+The monitor prints live session events and recovery decisions. Today uses Asia/Bangkok by default; change it with `--timezone`. Recovery sends `continue` after a settled terminal `■ {"detail":"Bad Request"}` error; Codex screen rendering verifies an empty prompt even when its busy status is stale. It skips approval menus and changed input, allows three attempts without a new displayed tool step, keeps a 30-second cooldown, and leaves closed sessions closed. A new tool block resets the retry budget. Quiet working sessions are reported for inspection. Ctrl+C stops the monitor without stopping agents.
+
+Tell managed agents to print `[CLIDECK:DONE]` alone on a line after completing and checking their task, or `[CLIDECK:BLOCKED]` / `[CLIDECK:FAILED]` when they cannot proceed. An idle session without a marker remains idle; it is not reported as completed. Restart the CliDeck server to load the master API before first use; a restart also interrupts live sessions, so finish or save their work first.
+
 **Native terminals** - each session opens into its real terminal. keys go straight to the agent, nothing sits in the middle.
 
 ## Supported agents
@@ -107,7 +123,7 @@ Claude Code, Codex, Gemini CLI, OpenCode, Pi, Shell, and any other terminal tool
 
 ## Docs
 
-Guides, agent setup, plugin development: **[docs.clideck.dev](https://docs.clideck.dev)**
+Run `npm test` for local regression checks. See [CONTRIBUTING.md](CONTRIBUTING.md) for changes and verification.
 
 ## Acknowledgments
 

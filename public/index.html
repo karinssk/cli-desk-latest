@@ -117,6 +117,21 @@
       50% { box-shadow: 0 0 0 0.55rem rgba(59, 130, 246, 0); }
     }
     #main { min-width: 0; }
+    #session-monitor { width: 270px; flex: 0 0 270px; min-width: 0; background: var(--color-sidebar); border-left: 1px solid var(--color-border); }
+    #session-monitor[hidden] { display: none; }
+    #monitor-toggle { position: absolute; top: 8px; right: 12px; z-index: 25; width: 32px; height: 32px; border-radius: 8px; background: var(--color-raised); border: 1px solid var(--color-border); color: var(--color-soft); }
+    #monitor-toggle:hover, #monitor-toggle:focus-visible { color: var(--color-text); border-color: var(--color-dim); }
+    #monitor-toggle:focus-visible { outline: 2px solid var(--color-bright); outline-offset: 2px; }
+    #plugin-toolbar { right: 52px !important; }
+    .monitor-row { padding: 11px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent); }
+    .monitor-row dt { color: var(--color-subtle); font-size: 11px; }
+    .monitor-row dd { color: var(--color-text); font-size: 13px; margin-top: 3px; overflow-wrap: anywhere; }
+    #monitor-progress { height: 5px; border-radius: 99px; background: var(--color-muted); margin-top: 9px; overflow: hidden; }
+    #monitor-progress span { display: block; height: 100%; width: 0; background: var(--color-bright); }
+    @media (max-width: 700px) {
+      #session-monitor:not([hidden]) { position: fixed; top: 0; right: 0; bottom: 0; z-index: 210; width: min(270px, 82vw); box-shadow: -18px 0 40px var(--color-shadow); }
+      body.monitor-open #monitor-toggle { position: fixed; right: min(282px, calc(82vw + 12px)); z-index: 215; }
+    }
     #mobile-nav-toggle,
     #mobile-nav-close,
     #mobile-sidebar-backdrop { display: none; }
@@ -268,7 +283,7 @@
     <div id="panel-plugins" class="hidden flex-col flex-1 min-h-0">
       <div class="flex items-center px-4 py-3 border-b border-slate-700/50">
         <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Plugins</span>
-        <a href="https://clideck.dev/plugins" target="_blank" rel="noopener" class="ml-auto text-[11px] text-blue-400 hover:text-blue-300 transition-colors" title="Browse plugins">Get plugins &rarr;</a>
+        <a href="https://github.com/karinssk/cli-desk-latest/tree/main/plugins" target="_blank" rel="noopener" class="ml-auto text-[11px] text-blue-400 hover:text-blue-300 transition-colors" title="Browse plugins">Get plugins &rarr;</a>
       </div>
       <div id="plugins-list" class="flex-1 overflow-y-auto py-2"></div>
     </div>
@@ -308,6 +323,7 @@
 
   <!-- Main -->
   <main id="main" class="flex-1 flex relative">
+    <button id="monitor-toggle" type="button" aria-label="Show session details" aria-controls="session-monitor" aria-expanded="false" title="Session details" class="flex items-center justify-center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
     <button id="mobile-nav-toggle" type="button" aria-label="Open sidebar">
       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
@@ -561,6 +577,21 @@
       </div>
     </div>
   </main>
+
+  <aside id="session-monitor" hidden aria-label="Session details" class="tmx-scroll overflow-y-auto p-4">
+    <div class="flex items-center justify-between border-b pb-3" style="border-color:var(--color-border)"><h2 class="text-sm font-semibold">Session details</h2><span id="monitor-name" class="text-xs truncate ml-2" style="color:var(--color-subtle)"></span></div>
+    <dl>
+      <div class="monitor-row"><dt>Status</dt><dd id="monitor-status">Unknown</dd></div>
+      <div class="monitor-row"><dt>Model</dt><dd id="monitor-model">Unknown</dd></div>
+      <div class="monitor-row"><dt>Reasoning</dt><dd id="monitor-reasoning">Unknown</dd></div>
+      <div class="monitor-row"><dt>Context used</dt><dd id="monitor-context">Unknown</dd><div id="monitor-progress" role="progressbar" aria-label="Context used"><span></span></div></div>
+      <div class="monitor-row"><dt id="monitor-tokens-label">Cumulative tokens</dt><dd id="monitor-cumulative">Unknown</dd></div>
+      <div class="monitor-row"><dt>Provider quota</dt><dd id="monitor-quota">Unknown</dd></div>
+      <div class="monitor-row"><dt>Provider reported cost</dt><dd id="monitor-cost">Unknown</dd></div>
+      <div class="monitor-row"><dt>Started in</dt><dd id="monitor-cwd">Unknown</dd></div>
+      <div class="monitor-row"><dt>Branch</dt><dd id="monitor-branch">Unknown</dd></div>
+    </dl>
+  </aside>
 
   <script src="/xterm.js"></script>
   <script src="/addon-fit.js"></script>

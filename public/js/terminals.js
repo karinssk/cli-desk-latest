@@ -1,4 +1,5 @@
 import { state, send } from './state.js';
+import { renderSessionMonitor } from './monitor-sidebar.js';
 import { esc, miniMarkdown, resolveIconPath } from './utils.js';
 import { resolveTheme, resolveAccent, applyTheme } from './profiles.js';
 import { attachToTerminal, registerHotkey } from './hotkeys.js';
@@ -867,6 +868,7 @@ export function removeTerminal(id) {
       document.getElementById('terminals').style.pointerEvents = 'none';
     }
   }
+  renderSessionMonitor();
   regroupSessions();
 }
 
@@ -901,6 +903,7 @@ export function select(id) {
     if (!document.querySelector('[contenteditable="true"]')) entry.term.focus();
   }
   state.active = id;
+  renderSessionMonitor();
   refreshTerminalInputActions();
   localStorage.setItem('clideck.activeSessionId', id);
 }
@@ -967,10 +970,13 @@ function readLastAgentLine(term, commandId) {
 
 function setStatus(id, working) {
   const entry = state.terms.get(id);
-  if (!entry || entry.working === working) return;
+  if (!entry) return;
+  entry.statusKnown = true;
+  if (entry.working === working) { if (state.active === id) renderSessionMonitor(); return; }
 
   const wasWorking = entry.working;
   entry.working = working;
+  if (state.active === id) renderSessionMonitor();
 
   // Notify on working → idle transition
   if (wasWorking && !working && !entry.muted) {
@@ -1101,9 +1107,15 @@ function hideRestartBanner(id) {
 }
 
 export function restartComplete(id, msg) {
+  if (msg.error) return;
   hideRestartBanner(id);
   const entry = state.terms.get(id);
   if (!entry) return;
+  entry.cancelIdleCapture?.();
+  entry.working = false;
+  entry.workStartedAt = null;
+  const statusEl = document.querySelector(`.group[data-id="${id}"] .session-status`);
+  if (statusEl) renderSessionStatus(entry, statusEl, false);
   entry.term.clear();
   if (state.active !== id) select(id);
   else entry.term.focus();
@@ -1587,6 +1599,7 @@ function selectPill(id) {
   document.querySelector(`.pill-row[data-pill-id="${id}"]`)?.classList.add('active-session');
 
   state.active = null;
+  renderSessionMonitor();
   openPillLog(id);
 }
 

@@ -6,6 +6,7 @@ const { parseCommand, resolveValidDir, defaultShell, binName } = require('./util
 const activity = require('./activity');
 const transcript = require('./transcript');
 const telemetry = require('./telemetry-receiver');
+const sessionMonitor = require('./session-monitor');
 const opencodeBridge = require('./opencode-bridge');
 const piBridge = require('./pi-bridge');
 const plugins = require('./plugin-loader');
@@ -127,7 +128,8 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
   }
 
   const sessionIdRe = cmd.sessionIdPattern ? new RegExp(cmd.sessionIdPattern, 'i') : null;
-  const session = { name, themeId, commandId, cwd, pty: term, chunks: [], chunksSize: 0, sessionToken: savedToken || null, projectId: projectId || null, presetId: preset?.presetId || 'shell', working: undefined, _finalizeOnCapture: !!preset?.finalizeOnCapture };
+  const session = { name, themeId, commandId, cwd, startedAt: new Date().toISOString(), lastInputAt: null, lastOutputAt: null, pty: term, chunks: [], chunksSize: 0, sessionToken: savedToken || null, projectId: projectId || null, presetId: preset?.presetId || 'shell', working: undefined, _finalizeOnCapture: !!preset?.finalizeOnCapture };
+  if (session.presetId === 'codex') session._codexHome = extraEnv.CODEX_HOME || process.env.CODEX_HOME || join(require('os').homedir(), '.codex');
   sessions.set(id, session);
   transcript.setFinalizeOnIdle(id, ['claude-code', 'codex', 'gemini-cli', 'opencode', 'pi', 'clideck-agent'].includes(lineageOf(session.presetId)) ? session.presetId : null);
 
@@ -135,9 +137,11 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
   // early events to this session even when the agent omits clideck.session_id.
   // The receiver itself decides whether to surface a setup prompt.
   if (preset?.telemetryEnv) telemetry.watchSession(id, binName(cmd.command));
-  if (preset?.bridge === 'opencode') opencodeBridge.watchSession(id, cwd);
+  if (preset?.bridge === 'opencode') opencodeBridge.watchSession(id, cwd, savedToken);
 
   term.onData((data) => {
+    session.outputVersion = (session.outputVersion || 0) + 1;
+    session.lastOutputAt = new Date().toISOString();
     session.chunks.push(data);
     session.chunksSize += data.length;
     while (session.chunksSize > MAX_BUFFER && session.chunks.length > 1) {
@@ -159,6 +163,7 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
   });
 
   term.onExit(() => {
+    session._masterScreen?.dispose();
     // Skip cleanup if this PTY was replaced by a restart
     const s = sessions.get(id);
     if (s?.pty !== term) return;
@@ -231,7 +236,7 @@ function create(msg, ws, cfg) {
 
   const createdPresetId = matchPreset(cmd)?.presetId || 'shell';
   const installId = msg.installId || undefined;
-  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId: createdPresetId, projectId, installId });
+  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId: createdPresetId, projectId, installId, cwd });
 
   // Immediate setup notification if config not detected
   const preset = matchPreset(cmd);
@@ -265,7 +270,7 @@ function createProgrammatic(opts, cfg) {
   if (s && opts.ephemeral) s.ephemeral = true;
 
   const presetId = matchPreset(cmd)?.presetId || 'shell';
-  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId, projectId });
+  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId, projectId, cwd });
   return { id };
 }
 
@@ -315,7 +320,7 @@ function resume(msg, ws, cfg) {
   broadcast({ type: 'sessions.resumable', list: getResumable(cfg) });
 
   const resumePresetId = matchPreset(cmd)?.presetId || saved.presetId || 'shell';
-  broadcast({ type: 'created', id, name: saved.name, themeId: saved.themeId || saved.profileId || 'default', commandId: saved.commandId, presetId: resumePresetId, projectId: saved.projectId || null, muted: !!saved.muted, resumed: true, lastPreview: saved.lastPreview || '' });
+  broadcast({ type: 'created', id, name: saved.name, themeId: saved.themeId || saved.profileId || 'default', commandId: saved.commandId, presetId: resumePresetId, projectId: saved.projectId || null, muted: !!saved.muted, resumed: true, lastPreview: saved.lastPreview || '', cwd });
 }
 
 // --- Standard session operations ---
@@ -330,6 +335,7 @@ function input(msg) {
   activity.trackIn(msg.id, data.length);
   const s = sessions.get(msg.id);
   if (!s) return;
+  s.lastInputAt = new Date().toISOString();
   // Menu choice selected → back to working (Enter or digit keys only)
   if (s._menuKey && !s.working && (data === '\r' || /^[1-9]$/.test(data))) {
     // Approval/denial menus can leave a transient tool line as the latest
@@ -444,7 +450,8 @@ function restart(msg, ws, cfg) {
 function list() {
   return [...sessions].map(([id, s]) => ({
     id, name: s.name, themeId: s.themeId, commandId: s.commandId, presetId: s.presetId || 'shell', projectId: s.projectId, muted: !!s.muted,
-    working: !!s.working,
+    working: !!s.working, statusKnown: s.working !== undefined, cwd: s.cwd, monitor: s.monitor || {},
+    startedAt: s.startedAt, lastInputAt: s.lastInputAt, lastOutputAt: s.lastOutputAt,
     // Last preview text for sidebar display on reconnect
     lastPreview: s.lastPreview || '', lastActivityAt: s.lastActivityAt || null,
     menu: s._menuKey ? JSON.parse(s._menuKey) : undefined,
@@ -545,12 +552,16 @@ function loadSessions() {
 }
 
 let autoSaveInterval = null;
+let monitorInterval = null;
 let getConfigFn = null;
 let lastSkippedNoTokenWarn = null;
 
 function startAutoSave(getConfig) {
   getConfigFn = getConfig;
   if (autoSaveInterval) return;
+  monitorInterval = setInterval(() => {
+    for (const [id, session] of sessions) if (session.presetId === 'codex') sessionMonitor.codex(session, id, broadcast);
+  }, 3000);
   autoSaveInterval = setInterval(() => {
     const cfg = getConfigFn?.();
     if (!cfg) return;
@@ -565,6 +576,7 @@ function startAutoSave(getConfig) {
 
 function shutdown(cfg) {
   clearInterval(autoSaveInterval);
+  clearInterval(monitorInterval);
   saveSessions(cfg);
   for (const [, s] of sessions) {
     try { s.pty.kill(); } catch {}

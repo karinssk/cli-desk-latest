@@ -5,6 +5,7 @@
 const env = globalThis.process?.env || {};
 const baseUrl = env.CLIDECK_URL || `http://localhost:${env.CLIDECK_PORT || "4000"}`;
 const CLIDECK_URL = `${baseUrl.replace(/\/$/, "")}/opencode-events`;
+const clideckSessionId = env.CLIDECK_SESSION_ID;
 
 function post(payload) {
   fetch(CLIDECK_URL, {
@@ -19,7 +20,7 @@ export const CliDeckBridge = async () => {
     event: async ({ event }) => {
       const t = event.type;
       if (t.startsWith("session.") || t.startsWith("message.")) {
-        post({ event: t, ...event.properties });
+        post({ event: t, ...event.properties, clideckSessionId });
       }
     },
   };
