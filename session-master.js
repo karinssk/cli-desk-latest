@@ -7,6 +7,16 @@ const recoveries = new Map();
 const QUIET_MS = 5000;
 const COOLDOWN_MS = 30000;
 const MAX_ATTEMPTS = 3;
+let masterMonitor = null;
+
+function recoveryState(session, id) {
+  const saved = recoveries.get(id);
+  const record = saved?.token === session?.sessionToken ? saved : null;
+  const progressed = record?.progress && session?._masterProgress && record.progress !== session._masterProgress;
+  return { attempts: progressed ? 0 : record?.attempts || 0, limit: MAX_ATTEMPTS,
+    failed: !!session?._masterFailedScreen,
+    lastError: session?._masterFailedScreen || record ? 'Bad Request' : null };
+}
 
 function failedScreen(lines) {
   const text = lines.map(line => line.trim()).filter(Boolean);
@@ -91,12 +101,13 @@ function continueSession(payload, sessionsApi, now = Date.now()) {
   if (attempts >= MAX_ATTEMPTS) throw Object.assign(new Error('Recovery attempt limit reached without new tool progress'), { status: 409 });
   const record = { at: now, outputAt: payload.expectedOutputAt, token: session.sessionToken, progress, attempts: attempts + 1 };
   recoveries.set(id, record);
+  sessionsApi.broadcast?.({ type: 'session.recovery', id, recovery: recoveryState(session, id) });
   const inputAt = session.lastInputAt;
   setTimeout(() => {
     const current = sessionsApi.getSessions().get(id);
     if (current !== session || current.sessionToken !== record.token || (current.working !== false && !current._masterFailedScreen) || current._menuKey
       || current.lastInputAt !== inputAt || current.lastOutputAt !== record.outputAt) return;
-    sessionsApi.input({ id, data: '\x1b[200~continue\x1b[201~\r' });
+    sessionsApi.input({ id, data: '\x1b[200~continue\x1b[201~\r', skipAssignment: true });
   }, 500);
   return { ok: true, attempt: record.attempts };
 }
@@ -105,11 +116,28 @@ async function handleHttp(req, res, sessionsApi) {
   try {
     if (!isLoopback(req) || req.headers.origin) throw Object.assign(new Error('Master accepts local CLI requests only'), { status: 403 });
     if (req.method === 'GET' && req.url === '/api/master/sessions') {
+      if (req.headers['x-clideck-master']) {
+        let monitor;
+        try { monitor = JSON.parse(req.headers['x-clideck-master']); } catch { return sendJson(res, 400, { error: 'Invalid monitor state' }); }
+        if (!monitor || typeof monitor.recover !== 'boolean' || typeof monitor.all !== 'boolean'
+          || !Array.isArray(monitor.ids) || monitor.ids.length > 100 || monitor.ids.some(id => typeof id !== 'string' || id.length > 200)) {
+          return sendJson(res, 400, { error: 'Invalid monitor state' });
+        }
+        let day;
+        try { day = new Intl.DateTimeFormat('en-CA', { timeZone: monitor.timezone || 'Asia/Bangkok' }); }
+        catch { return sendJson(res, 400, { error: 'Invalid monitor timezone' }); }
+        const today = day.format(new Date());
+        const sessionIds = sessionsApi.list().filter(row => row.presetId !== 'shell' && (monitor.all || monitor.ids.includes(row.id))
+          && [row.startedAt, row.lastInputAt, row.lastOutputAt].some(value => value && day.format(new Date(value)) === today)).map(row => row.id);
+        masterMonitor = { seenAt: Date.now(), recover: monitor.recover, all: monitor.all, ids: monitor.ids, sessionIds };
+        sessionsApi.broadcast?.({ type: 'master.status', monitor: masterMonitor });
+      }
       for (const session of sessionsApi.getSessions().values()) await refreshScreen(session);
       return sendJson(res, 200, { sessions: sessionsApi.list().map(row => {
         const session = sessionsApi.getSessions().get(row.id);
         const error = recoveryError(session, row.lastOutputAt);
         const recoveryEpoch = createHash('sha256').update(`${row.startedAt || ''}:${session?.sessionToken || ''}`).digest('hex');
+        sessionsApi.broadcast?.({ type: 'session.recovery', id: row.id, recovery: recoveryState(session, row.id) });
         return { ...row, recoverableError: !error, recoveryError: error, recoveryProgress: session?._masterProgress || '', recoveryEpoch };
       }) });
     }

@@ -1,4 +1,5 @@
 const { sendJson, isLoopback, sameProject, projectName, sessionAddress } = require('./http-util');
+const { detailsOf } = require('./session-details');
 
 function agentRow(id, s, callerId, projects) {
   const project = projectName(projects, s.projectId);
@@ -10,6 +11,8 @@ function agentRow(id, s, callerId, projects) {
     project,
     address: sessionAddress(s, id, projects),
     working: !!s.working,
+    statusKnown: s.working !== undefined,
+    details: detailsOf(s),
     lastPreview: s.lastPreview || '',
     lastActivityAt: s.lastActivityAt || null,
     caller: id === callerId,

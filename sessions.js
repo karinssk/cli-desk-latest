@@ -13,7 +13,8 @@ const plugins = require('./plugin-loader');
 const { presetForCommand } = require('./preset-utils');
 const { lineageOf } = require('./lineage');
 const { stripAnsi } = require('./ansi-utils');
-const { withCliDeckGuide } = require('./agent-session-guide');
+const { withCliDeckGuide, assignmentText } = require('./agent-session-guide');
+const { detailsOf, validateUpdate } = require('./session-details');
 
 const THEMES = require('./themes');
 const MAX_BUFFER = 2 * 1024 * 1024;
@@ -111,9 +112,11 @@ function isLightTheme(themeId) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 150;
 }
 
-function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken, projectId, cols, rows) {
+function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken, projectId, cols, rows, details) {
   const preset = matchPreset(cmd);
-  const launchParts = withCliDeckGuide(parts, preset?.presetId);
+  const isAgent = ['claude-code', 'codex', 'gemini-cli', 'opencode', 'pi', 'clideck-agent'].includes(lineageOf(preset?.presetId));
+  const notice = isAgent ? assignmentText(id, { details }, null, getConfigFn?.() || {}) : '';
+  const launchParts = withCliDeckGuide(parts, preset?.presetId, notice);
   const telemetryEnv = buildTelemetryEnv(id, cmd);
   const colorEnv = isLightTheme(themeId) ? { COLORFGBG: '0;15' } : { COLORFGBG: '15;0' };
   const extraEnv = commandEnv(cmd);
@@ -128,9 +131,13 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
   }
 
   const sessionIdRe = cmd.sessionIdPattern ? new RegExp(cmd.sessionIdPattern, 'i') : null;
-  const session = { name, themeId, commandId, cwd, startedAt: new Date().toISOString(), lastInputAt: null, lastOutputAt: null, pty: term, chunks: [], chunksSize: 0, sessionToken: savedToken || null, projectId: projectId || null, presetId: preset?.presetId || 'shell', working: undefined, _finalizeOnCapture: !!preset?.finalizeOnCapture };
+  const session = { name, themeId, commandId, cwd, details: detailsOf({ details }), startedAt: new Date().toISOString(), lastInputAt: null, lastOutputAt: null, pty: term, chunks: [], chunksSize: 0, sessionToken: savedToken || null, projectId: projectId || null, presetId: preset?.presetId || 'shell', working: undefined, _finalizeOnCapture: !!preset?.finalizeOnCapture };
   if (session.presetId === 'codex') session._codexHome = extraEnv.CODEX_HOME || process.env.CODEX_HOME || join(require('os').homedir(), '.codex');
   sessions.set(id, session);
+  if (notice) {
+    if (['codex', 'claude-code'].includes(preset?.presetId) && !launchParts.injectionUnsupported) session.assignmentDelivery = 'Included at startup';
+    else queueAssignment(id, session, getConfigFn?.() || {});
+  } else session.assignmentDelivery = 'Metadata only (not an AI session)';
   transcript.setFinalizeOnIdle(id, ['claude-code', 'codex', 'gemini-cli', 'opencode', 'pi', 'clideck-agent'].includes(lineageOf(session.presetId)) ? session.presetId : null);
 
   // Always watch telemetry-backed agents so OTLP fallback matching can attach
@@ -176,7 +183,7 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
     if (!s.ephemeral && cmd.canResume && cmd.resumeCommand && s.sessionToken) {
       resumable.push({
         id, name: s.name, commandId: s.commandId, presetId: s.presetId || 'shell', cwd: s.cwd,
-        themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted,
+        themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted, details: detailsOf(s),
         lastPreview: s.lastPreview || '', lastActivityAt: s.lastActivityAt || null,
         savedAt: new Date().toISOString(),
       });
@@ -185,6 +192,9 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
       transcript.clear(id);
     }
     sessions.delete(id);
+    if (!s.ephemeral && cmd.canResume && cmd.resumeCommand && s.sessionToken && getConfigFn) {
+      try { saveSessions(getConfigFn()); } catch (e) { console.error('Session exit save failed:', e.message); }
+    }
     broadcast({ type: 'closed', id });
     if (!s.ephemeral && cmd.canResume && s.sessionToken) {
       broadcast({ type: 'sessions.resumable', list: getResumable() });
@@ -236,7 +246,7 @@ function create(msg, ws, cfg) {
 
   const createdPresetId = matchPreset(cmd)?.presetId || 'shell';
   const installId = msg.installId || undefined;
-  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId: createdPresetId, projectId, installId, cwd });
+  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId: createdPresetId, projectId, installId, cwd, details: detailsOf(sessions.get(id)) });
 
   // Immediate setup notification if config not detected
   const preset = matchPreset(cmd);
@@ -270,7 +280,7 @@ function createProgrammatic(opts, cfg) {
   if (s && opts.ephemeral) s.ephemeral = true;
 
   const presetId = matchPreset(cmd)?.presetId || 'shell';
-  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId, projectId, cwd });
+  broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId, projectId, cwd, details: detailsOf(s) });
   return { id };
 }
 
@@ -303,7 +313,7 @@ function resume(msg, ws, cfg) {
   const cwd = resolveValidDir(saved.cwd || cfg.defaultPath);
   const id = saved.id;
 
-  const err = spawnSession(id, cmd, parts, cwd, saved.name, saved.themeId || saved.profileId || 'default', saved.commandId, saved.sessionToken, saved.projectId);
+  const err = spawnSession(id, cmd, parts, cwd, saved.name, saved.themeId || saved.profileId || 'default', saved.commandId, saved.sessionToken, saved.projectId, undefined, undefined, saved.details);
   if (err) {
     console.error('Failed to resume pty:', err.message);
     ws.send(JSON.stringify({ type: 'error', message: err.message }));
@@ -320,7 +330,7 @@ function resume(msg, ws, cfg) {
   broadcast({ type: 'sessions.resumable', list: getResumable(cfg) });
 
   const resumePresetId = matchPreset(cmd)?.presetId || saved.presetId || 'shell';
-  broadcast({ type: 'created', id, name: saved.name, themeId: saved.themeId || saved.profileId || 'default', commandId: saved.commandId, presetId: resumePresetId, projectId: saved.projectId || null, muted: !!saved.muted, resumed: true, lastPreview: saved.lastPreview || '', cwd });
+  broadcast({ type: 'created', id, name: saved.name, themeId: saved.themeId || saved.profileId || 'default', commandId: saved.commandId, presetId: resumePresetId, projectId: saved.projectId || null, muted: !!saved.muted, resumed: true, lastPreview: saved.lastPreview || '', cwd, details: detailsOf(s) });
 }
 
 // --- Standard session operations ---
@@ -356,7 +366,14 @@ function input(msg) {
     }
     return;
   }
-  writeSessionInput(msg.id, data);
+  // Never inject into approval menus, busy agents, or shell commands.
+  const submit = data === '\r' || data === '\n' || data.endsWith('\x1b[201~\r');
+  if (s._assignmentNotice && submit && !msg.skipAssignment && !s._menuKey && s.working !== true) {
+    writeSessionInput(msg.id, data.slice(0, -1) + '\x1b[200~\n\n' + s._assignmentNotice + '\x1b[201~' + data.slice(-1));
+    delete s._assignmentNotice;
+    s.assignmentDelivery = 'Submitted with message';
+    broadcast({ type: 'session.details', id: msg.id, details: detailsOf(s), assignmentDelivery: s.assignmentDelivery });
+  } else writeSessionInput(msg.id, data);
   if (data === '\x1b' && s.working) {
     transcript.clearAgentCandidate(msg.id);
     broadcast({ type: 'session.status', id: msg.id, working: false, source: 'esc' });
@@ -419,7 +436,7 @@ function restart(msg, ws, cfg) {
   }
 
   const savedToken = s.sessionToken;
-  const { name, cwd, commandId, projectId, muted, lastPreview, lastActivityAt } = s;
+  const { name, cwd, commandId, projectId, muted, lastPreview, lastActivityAt, details } = s;
 
   activity.clear(id);
   telemetry.clear(id);
@@ -430,7 +447,7 @@ function restart(msg, ws, cfg) {
   s.pty.kill();
   sessions.delete(id);
 
-  const err = spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken, projectId, msg.cols, msg.rows);
+  const err = spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken, projectId, msg.cols, msg.rows, details);
   if (err) {
     console.error('[restart] spawn failed:', err.message);
     broadcast({ type: 'session.restarted', id, error: err.message });
@@ -444,13 +461,13 @@ function restart(msg, ws, cfg) {
     next.lastActivityAt = lastActivityAt || null;
   }
 
-  broadcast({ type: 'session.restarted', id, resumed: !!canResume });
+  broadcast({ type: 'session.restarted', id, resumed: !!canResume, details: detailsOf(next) });
 }
 
 function list() {
   return [...sessions].map(([id, s]) => ({
-    id, name: s.name, themeId: s.themeId, commandId: s.commandId, presetId: s.presetId || 'shell', projectId: s.projectId, muted: !!s.muted,
-    working: !!s.working, statusKnown: s.working !== undefined, cwd: s.cwd, monitor: s.monitor || {},
+    id, name: s.name, themeId: s.themeId, commandId: s.commandId, presetId: s.presetId || 'shell', projectId: s.projectId, muted: !!s.muted, details: detailsOf(s),
+    working: !!s.working, statusKnown: s.working !== undefined, cwd: s.cwd, monitor: s.monitor || {}, assignmentDelivery: s.assignmentDelivery,
     startedAt: s.startedAt, lastInputAt: s.lastInputAt, lastOutputAt: s.lastOutputAt,
     // Last preview text for sidebar display on reconnect
     lastPreview: s.lastPreview || '', lastActivityAt: s.lastActivityAt || null,
@@ -478,9 +495,45 @@ function setProject(id, projectId) {
   return { ok: true };
 }
 
+function getDetails(id) {
+  const s = sessions.get(id) || resumable.find(item => item.id === id);
+  return s ? { details: detailsOf(s), cwd: s.cwd, assignmentDelivery: s.assignmentDelivery } : null;
+}
+
+function queueAssignment(id, s, cfg) {
+  if (!['claude-code', 'codex', 'gemini-cli', 'opencode', 'pi', 'clideck-agent'].includes(lineageOf(s.presetId))) {
+    s.assignmentDelivery = 'Metadata only (not an AI session)';
+    return;
+  }
+  s._assignmentNotice = assignmentText(id, s, null, cfg);
+  s.assignmentDelivery = 'Pending next message';
+}
+
+function refreshRoleNotices(cfg) {
+  for (const [id, s] of sessions) {
+    if (!detailsOf(s).role) continue;
+    queueAssignment(id, s, cfg);
+    broadcast({ type: 'session.details', id, details: detailsOf(s), assignmentDelivery: s.assignmentDelivery });
+  }
+}
+
+function updateDetails(id, patch, cfg) {
+  const all = new Map([...resumable.map(s => [s.id, s]), ...sessions]);
+  const s = all.get(id);
+  const details = validateUpdate(id, patch, all);
+  const previous = s.details;
+  s.details = details;
+  try { saveSessions(cfg); }
+  catch (err) { s.details = previous; throw err; }
+  if (sessions.has(id) && JSON.stringify(previous) !== JSON.stringify(details)) queueAssignment(id, s, cfg);
+  broadcast({ type: 'session.details', id, details, assignmentDelivery: s.assignmentDelivery });
+  return details;
+}
+
 function getResumable(cfg) {
-  if (!cfg) return resumable;
-  return resumable.map(s => {
+  if (!cfg) return resumable.map(s => ({ ...s, details: detailsOf(s) }));
+  return resumable.map(saved => {
+    const s = { ...saved, details: detailsOf(saved) };
     if (s.presetId) return s;
     const cmd = (cfg.commands || []).find(c => c.id === s.commandId);
     if (!cmd) return { ...s, presetId: 'shell' };
@@ -525,7 +578,7 @@ function saveSessions(cfg) {
     })
     .map(([id, s]) => ({
       id, name: s.name, commandId: s.commandId, presetId: s.presetId || 'shell', cwd: s.cwd,
-      themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted,
+      themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted, details: detailsOf(s),
       lastPreview: s.lastPreview || '', lastActivityAt: s.lastActivityAt || null,
       savedAt: new Date().toISOString(),
     }));
@@ -586,6 +639,7 @@ function shutdown(cfg) {
 module.exports = {
   clients, broadcast, addBroadcastListener, getSessions: () => sessions,
   create, createProgrammatic, resume, restart, input, resize, rename, setTheme, setMute, setProject, setPreview, close,
+  getDetails, updateDetails, refreshRoleNotices,
   list, getResumable, sendBuffers,
   loadSessions, startAutoSave, shutdown,
 };

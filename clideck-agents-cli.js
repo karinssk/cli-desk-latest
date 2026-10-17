@@ -63,11 +63,16 @@ function formatAgents(agents, opts = {}) {
   if (!agents.length) return opts.all ? 'No active sessions found.' : 'No active sessions found in this project.';
   return agents.map(a => {
     const marker = a.caller ? 'self' : 'peer';
-    const status = a.working ? 'working' : 'idle';
+    const status = a.statusKnown === false ? 'unknown' : a.working ? 'working' : 'idle';
     const preview = a.lastPreview ? ` - ${a.lastPreview}` : '';
     const address = a.address && a.address !== a.name ? ` ask=${a.address}` : '';
     const project = opts.all && a.project ? ` project="${a.project}"` : '';
-    return `${a.name} (${marker}, ${a.preset}, ${status}) id=${a.id}${address}${project}${preview}`;
+    const details = a.details || {};
+    const role = details.role ? ` role=${JSON.stringify(details.role)}` : '';
+    const team = details.teamId ? ` team=${JSON.stringify(details.teamId)}` : '';
+    const parent = details.parentSessionId ? ` parent=${details.parentSessionId}` : '';
+    const task = details.currentTask ? ` task=${JSON.stringify(details.currentTask.replace(/\s+/g, ' ').slice(0, 120))}` : '';
+    return `${a.name} (${marker}, ${a.preset}, ${status}) id=${a.id}${address}${project}${team}${role}${parent}${task}${preview}`;
   }).join('\n');
 }
 

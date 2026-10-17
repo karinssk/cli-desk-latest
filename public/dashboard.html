@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CliDeck — Dashboard</title>
+  <link rel="icon" href="/img/clideck-logo-icon.png"><link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <aside class="navigation">
+    <a class="brand" href="/dashboard.html"><img src="/img/clideck-logo-icon.png" alt="">CliDeck<span>CONTROL ROOM</span></a>
+    <p class="nav-label">WORKSPACE</p>
+    <nav aria-label="Dashboard pages"><a href="#overview" data-page="overview"><span aria-hidden="true">◫</span> Overview</a><a href="#agents" data-page="agents"><span aria-hidden="true">◉</span> Agent teams</a><a href="#recovery" data-page="recovery"><span aria-hidden="true">↺</span> Recovery</a></nav>
+    <div class="nav-footer"><p><span class="dot"></span> Your local command center</p><a class="terminal-link" href="/">Open terminals ↗</a></div>
+  </aside>
+  <main>
+    <header><span class="breadcrumb">Workspace <span>/</span> <span id="page-label">Overview</span></span><div class="connection"><span id="connection-dot" class="dot"></span><span id="connection" role="status">Connecting</span><button id="refresh" type="button" aria-label="Refresh dashboard">↻</button></div></header>
+    <div class="content">
+      <div class="page-heading"><div><p class="eyebrow">MISSION CONTROL</p><h1 id="page-title">Your agents, at a glance.</h1><p id="page-description">A live view of the work happening across your workspace.</p></div><a class="primary" href="/">Open workspace <span aria-hidden="true">↗</span></a></div>
+      <p id="error" class="error" hidden role="alert"></p>
+      <section class="stats" aria-label="Workspace statistics">
+        <article><span>Live sessions</span><strong id="stat-sessions">—</strong><small>Currently open terminals</small></article>
+        <article><span><i class="dot working"></i> Working</span><strong id="stat-working">—</strong><small>Observed session activity</small></article>
+        <article><span>Native helpers</span><strong id="stat-helpers">—</strong><small id="helper-caption">Including recorded history</small></article>
+        <article><span><i class="dot attention"></i> Needs attention</span><strong id="stat-attention">—</strong><small>Errors or input requested</small></article>
+      </section>
+      <section id="view-overview" class="view">
+        <div class="section-heading"><div><h2>Session activity <span id="session-count" class="count">0</span></h2><p>Your active work, without switching terminals.</p></div><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a session or project…" aria-label="Find a session or project"></label></div>
+        <div id="sessions" class="session-grid"></div>
+        <div class="bottom-note"><span>● Read-only monitoring. No automatic task dispatch.</span><span id="updated">Waiting for the first snapshot</span></div>
+      </section>
+      <section id="view-agents" class="view" hidden><div class="section-heading"><div><h2>Agent teams <span id="team-count" class="count">0</span></h2><p>Native helpers linked to their actual parent chat.</p></div></div><div id="teams" class="teams"></div></section>
+      <section id="view-recovery" class="view" hidden><div class="section-heading"><div><h2>Recovery desk</h2><p>Current failures and reported recovery attempts. Nothing is resumed from this page.</p></div></div><div id="recovery" class="recovery-grid"></div></section>
+    </div>
+  </main>
+  <script type="module" src="/js/dashboard.js"></script>
+</body>
+</html>

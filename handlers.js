@@ -367,6 +367,30 @@ function onConnection(ws) {
       case 'create':          sessions.create(msg, ws, cfg); break;
       case 'session.resume':  sessions.resume(msg, ws, cfg); break;
       case 'session.restart': console.log('[handler] session.restart', msg.id); sessions.restart(msg, ws, cfg); break;
+      case 'session.details.update': {
+        try {
+          sessions.updateDetails(msg.id, msg.details, cfg);
+          if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'session.details.saved', id: msg.id, requestId: msg.requestId }));
+        } catch (err) {
+          if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'error', id: msg.id, requestId: msg.requestId, message: err.message }));
+        }
+        break;
+      }
+      case 'session.details.get': {
+        const found = sessions.getDetails(msg.id);
+        if (!found) { ws.send(JSON.stringify({ type: 'error', message: 'Session not found' })); break; }
+        const reply = branch => {
+          const latest = sessions.getDetails(msg.id);
+          if (ws.readyState === 1 && latest) ws.send(JSON.stringify({ type: 'session.details', id: msg.id, details: latest.details, assignmentDelivery: latest.assignmentDelivery, branch }));
+        };
+        execFile('git', ['-C', found.cwd, 'symbolic-ref', '--short', '-q', 'HEAD'], { timeout: 2000 }, (err, stdout) => {
+          if (!err && stdout.trim()) { reply(stdout.trim()); return; }
+          execFile('git', ['-C', found.cwd, 'rev-parse', '--short', 'HEAD'], { timeout: 2000 }, (fallbackErr, hash) => {
+            reply(fallbackErr ? '' : hash.trim());
+          });
+        });
+        break;
+      }
       case 'input':                sessions.input(msg); break;
       case 'clipboard.image': {
         try {
@@ -424,7 +448,7 @@ function onConnection(ws) {
           }
           // Auto-approve: send Enter immediately when menu detected
           if (choices && plugins.shouldAutoApproveMenu(msg.id)) {
-            setTimeout(() => sessions.input({ id: msg.id, data: '\r' }), 500);
+            setTimeout(() => sessions.input({ id: msg.id, data: '\r', skipAssignment: true }), 500);
           }
           if (choices) transcript.commitAgentCandidate(msg.id, sess.presetId);
           if (key !== (sess._menuKey || '')) {
@@ -457,6 +481,10 @@ function onConnection(ws) {
         break;
 
       case 'config.update':
+        if (msg.config?.teamRoles !== undefined) {
+          try { msg.config.teamRoles = require('./session-details').validateTeamRoles(msg.config.teamRoles); }
+          catch (err) { ws.send(JSON.stringify({ type: 'error', requestId: msg.requestId, message: err.message })); break; }
+        }
         delete msg.config.pluginsDir;
         delete msg.config.version;
         // The client only ever sees the filtered command list — keep the
@@ -469,6 +497,7 @@ function onConnection(ws) {
         detectTelemetryConfig(cfg);
         config.save(cfg);
         plugins.notifyConfig(cfg);
+        if (msg.config.teamRoles !== undefined) sessions.refreshRoleNotices(cfg);
         sessions.broadcast({ type: 'config', config: configForClient() });
         break;
 

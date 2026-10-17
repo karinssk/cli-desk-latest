@@ -972,11 +972,11 @@ function setStatus(id, working) {
   const entry = state.terms.get(id);
   if (!entry) return;
   entry.statusKnown = true;
-  if (entry.working === working) { if (state.active === id) renderSessionMonitor(); return; }
+  if (entry.working === working) { renderSessionMonitor(); return; }
 
   const wasWorking = entry.working;
   entry.working = working;
-  if (state.active === id) renderSessionMonitor();
+  renderSessionMonitor();
 
   // Notify on working → idle transition
   if (wasWorking && !working && !entry.muted) {

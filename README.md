@@ -66,6 +66,16 @@ clideck --port 4001
 
 **Live status** - see which agent is working and which is waiting. Status detection for Claude Code, Codex, Gemini CLI, OpenCode, and Pi.
 
+**Agent & team sidebar** - use the details button at the top-right of a terminal to show its role, task, teammates, model/context usage, session ID, project, folder, Git branch, and master recovery status. Expand **Edit team & task** to assign a team name, role, parent session, and task. Assignments are saved across restarts; teammate buttons open exact session IDs, even when names repeat. Team membership is explicit, and unavailable provider data is shown as “Not reported.” The sidebar collapses on desktop and overlays narrow screens.
+
+Run `npm run test:sidebar` for desktop and mobile browser checks with an installed Chrome, or set `CHROME_BIN` to another installed Chromium executable.
+
+**Dashboard** — open `/dashboard.html` or the dashboard icon in the terminal navigation rail. Overview, Agent teams, and Recovery views refresh live local session/helper data every five seconds. Search sessions and open exact parent terminals; monitoring is read-only. Disconnected data is labeled stale and activity becomes Unknown. Run `npm run test:dashboard` for desktop/mobile browser checks.
+
+**Chat agents** also includes persistent native Codex spawn history, not just Codex Teams registrations. On Node runtimes with `node:sqlite`, CliDeck reads the local `state_5.sqlite` spawn-edge index read-only, including nested/finished helpers. Recorded model metadata is not model attestation; unknown runtime status stays Unknown. Duplicate native IDs are merged, and unrelated chats and private prompt fields are excluded. Without SQLite support or a supported metadata schema the sidebar reports history unavailable.
+
+Assigned team, role, parent ID, and task are included in Codex/Claude startup instructions on launch or resume. Changes to a running agent are queued for its next submitted message while not busy; the sidebar's **Agent instructions** field reports pending/submitted delivery. Other supported AI CLIs use this next-message path; shell terminals never receive injected text. Automatic recovery/approval inputs do not deliver assignments. Model defaults are recommendations, not model switches. Agents can refresh authoritative assignments with `clideck agents --json --all`. Persistence across restarts requires a resumable session with a captured session token.
+
 **Session resume** - close the lid, reopen tomorrow, pick up where things left off. each agent's session ID is captured automatically.
 
 **Ask another session** - from inside any CliDeck session, an agent can consult another session and get the answer back as command output:

@@ -130,12 +130,12 @@ function recoveryDecision(session, evidence, state, opts, now = Date.now()) {
   return 'recover';
 }
 
-function requestJson(base, path, method = 'GET', body) {
+function requestJson(base, path, method = 'GET', body, headers = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, base);
     const payload = body === undefined ? null : JSON.stringify(body);
     const client = url.protocol === 'https:' ? https : http;
-    const req = client.request(url, { method, timeout: 5000, headers: payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {} }, res => {
+    const req = client.request(url, { method, timeout: 5000, headers: { ...headers, ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}) } }, res => {
       let raw = '';
       res.setEncoding('utf8');
       res.on('data', chunk => { raw += chunk; if (raw.length > 1024 * 1024) req.destroy(new Error('CliDeck response too large')); });
@@ -173,7 +173,8 @@ async function run(args) {
     if (polling || stopped) return;
     polling = true;
     try {
-      const data = await requestJson(opts.url, '/api/master/sessions');
+      const data = await requestJson(opts.url, '/api/master/sessions', 'GET', undefined,
+        { 'X-CliDeck-Master': JSON.stringify({ recover: opts.recover, all: opts.all, ids: opts.sessions, timezone: opts.timezone }) });
       if (!Array.isArray(data.sessions)) throw new Error('CliDeck returned no sessions list');
       const seen = new Set();
       for (const session of data.sessions.filter(selected)) {

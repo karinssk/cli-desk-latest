@@ -1,5 +1,5 @@
 import { state, send, flushQueuedSends } from './state.js';
-import { setSessionMonitor } from './monitor-sidebar.js';
+import { setSessionMonitor, setSessionDetails, renderSessionMonitor, initializeSessionMonitor, assignmentResult, refreshRoleDefaults } from './monitor-sidebar.js';
 import { esc, binName, resolveIconPath, randomUUID } from './utils.js';
 import { addTerminal, removeTerminal, select, startRename, startProjectRename, setSessionTheme, openMenu, closeMenu, setStatus, updateMuteIndicator, updatePreview, markUnread, applyFilter, setTab, renderResumable, regroupSessions, toggleProjectCollapse, setSessionProject, estimateSize, restartComplete, positionMenu, addPill, updatePill, removePill, appendPillLog, setPillLogs, closePillLog, addTerminalInputAction, removeTerminalInputActionsForPlugin, trackTerminalInputData, copySessionName } from './terminals.js';
 import { renderSettings, updateVersionFooter } from './settings.js';
@@ -69,6 +69,7 @@ function connect() {
     switch (msg.type) {
       case 'config':
         state.cfg = msg.config;
+        refreshRoleDefaults();
         applyMode(state.cfg.colorMode || 'dark');
         regroupSessions();
         renderSettings();
@@ -96,6 +97,7 @@ function connect() {
         renderResumable();
         break;
       case 'error':
+        assignmentResult(msg, true);
         showToast(msg.message || 'CliDeck action failed.', { type: 'error', title: 'CliDeck Error', duration: 5000 });
         break;
       case 'clipboard.image.result':
@@ -109,10 +111,15 @@ function connect() {
           }
           msg.list.forEach(s => {
             addTerminal(s.id, s.name, s.themeId, s.commandId, s.projectId, s.muted, s.lastPreview, s.presetId, s.working);
+            state.terms.get(s.id).menu = s.menu;
             setSessionMonitor(s.id, s.monitor || {}, s.cwd, !!s.statusKnown);
+            setSessionDetails(s.id, s.details || {}, undefined, s.assignmentDelivery);
             if (s.statusKnown) setStatus(s.id, s.working);
           });
-          if (!state.active || !state.terms.has(state.active)) {
+          const requestedSession = new URLSearchParams(location.hash.slice(1)).get('session');
+          if (requestedSession && liveIds.has(requestedSession)) {
+            select(requestedSession);
+          } else if (!state.active || !state.terms.has(state.active)) {
             const savedActive = localStorage.getItem('clideck.activeSessionId');
             const nextId = savedActive && liveIds.has(savedActive) ? savedActive : msg.list[0]?.id;
             if (nextId) select(nextId);
@@ -123,6 +130,7 @@ function connect() {
         expandProjectForNewSession(msg.projectId);
         if (!state.terms.has(msg.id)) addTerminal(msg.id, msg.name, msg.themeId, msg.commandId, msg.projectId, msg.muted, msg.lastPreview, msg.presetId, msg.working);
         setSessionMonitor(msg.id, {}, msg.cwd, false);
+        setSessionDetails(msg.id, msg.details || {});
         select(msg.id);
         applyFilter();
         closeMobileSidebar();
@@ -141,14 +149,38 @@ function connect() {
       case 'session.restarted':
         console.log('[restart] got session.restarted from server', msg);
         if (!msg.error) setSessionMonitor(msg.id, {}, undefined, false);
+        if (!msg.error) setSessionDetails(msg.id, msg.details || {});
         restartComplete(msg.id, msg);
         break;
       case 'session.monitor':
         setSessionMonitor(msg.id, msg.monitor, undefined, msg.statusKnown);
         break;
+      case 'session.details':
+        setSessionDetails(msg.id, msg.details, msg.branch, msg.assignmentDelivery);
+        break;
+      case 'session.details.saved':
+        assignmentResult(msg);
+        break;
+      case 'session.recovery': {
+        const entry = state.terms.get(msg.id);
+        if (entry) entry.recovery = msg.recovery;
+        renderSessionMonitor();
+        break;
+      }
+      case 'master.status':
+        state.masterMonitor = msg.monitor;
+        renderSessionMonitor();
+        break;
+      case 'session.menu': {
+        const entry = state.terms.get(msg.id);
+        if (entry) entry.menu = msg.choices;
+        renderSessionMonitor();
+        break;
+      }
       // Telemetry/bridge working/idle
       case 'session.status':
         setStatus(msg.id, msg.working);
+        renderSessionMonitor();
         break;
       case 'session.dispatch':
         playAskDispatchSound(msg);
@@ -249,6 +281,7 @@ function connect() {
       case 'session.setProject': {
         const entry = state.terms.get(msg.id);
         if (entry) { entry.projectId = msg.projectId; regroupSessions(); }
+        renderSessionMonitor();
         break;
       }
       case 'session.mute': {
@@ -264,6 +297,7 @@ function connect() {
       case 'renamed': {
         const el = document.querySelector(`.group[data-id="${msg.id}"] .name`);
         if (el && el.contentEditable !== 'true') el.textContent = msg.name;
+        renderSessionMonitor();
         break;
       }
       case 'session.renameRejected': {
@@ -1585,5 +1619,6 @@ document.getElementById('remote-disconnect').addEventListener('click', doRemoteD
 document.getElementById('remote-disconnect2').addEventListener('click', doRemoteDisconnect);
 
 initDrag();
+initializeSessionMonitor(select);
 initSessionScrollbarVisibility();
 connect();

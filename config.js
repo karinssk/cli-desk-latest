@@ -7,6 +7,7 @@ const { defaultShell } = require('./utils');
 const { presetForCommand } = require('./preset-utils');
 
 const CONFIG_PATH = join(DATA_DIR, 'config.json');
+const { DEFAULT_TEAM_ROLES } = require('./session-details');
 
 const STARTER_PROMPTS = [
   {
@@ -53,6 +54,7 @@ const DEFAULTS = {
   defaultShell,
   prompts: [],
   projects: [],
+  teamRoles: DEFAULT_TEAM_ROLES,
 };
 
 function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }

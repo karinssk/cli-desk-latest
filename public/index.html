@@ -117,7 +117,7 @@
       50% { box-shadow: 0 0 0 0.55rem rgba(59, 130, 246, 0); }
     }
     #main { min-width: 0; }
-    #session-monitor { width: 270px; flex: 0 0 270px; min-width: 0; background: var(--color-sidebar); border-left: 1px solid var(--color-border); }
+    #session-monitor { width: 320px; flex: 0 0 320px; min-width: 0; background: var(--color-sidebar); border-left: 1px solid var(--color-border); }
     #session-monitor[hidden] { display: none; }
     #monitor-toggle { position: absolute; top: 8px; right: 12px; z-index: 25; width: 32px; height: 32px; border-radius: 8px; background: var(--color-raised); border: 1px solid var(--color-border); color: var(--color-soft); }
     #monitor-toggle:hover, #monitor-toggle:focus-visible { color: var(--color-text); border-color: var(--color-dim); }
@@ -128,9 +128,42 @@
     .monitor-row dd { color: var(--color-text); font-size: 13px; margin-top: 3px; overflow-wrap: anywhere; }
     #monitor-progress { height: 5px; border-radius: 99px; background: var(--color-muted); margin-top: 9px; overflow: hidden; }
     #monitor-progress span { display: block; height: 100%; width: 0; background: var(--color-bright); }
+    .monitor-section { padding: 18px 0 8px; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--color-dim); }
+    .monitor-team-agent { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 6px; border-radius: 6px; text-align: left; color: var(--color-text); }
+    .monitor-team-agent:hover, .monitor-team-agent:focus-visible { background: var(--color-raised); }
+    .monitor-team-agent[aria-current="true"] { background: var(--color-raised); border-left: 2px solid #60a5fa; }
+    .monitor-team-agent .agent-info { flex: 1; min-width: 0; }
+    .monitor-team-agent .agent-title { display: block; overflow-wrap: anywhere; font-size: 12px; }
+    .monitor-team-agent small { display: block; font-size: 10px; color: var(--color-dim); }
+    .monitor-team-agent .agent-state { font-size: 10px; color: var(--color-dim); }
+    .monitor-agent-card { display:flex; align-items:center; gap:10px; padding:12px 10px; margin-top:14px; border:1px solid var(--color-border); border-radius:9px; background:var(--color-raised); }
+    .monitor-avatar { display:inline-grid; place-items:center; flex:0 0 30px; height:30px; border-radius:9px; background:color-mix(in srgb, #60a5fa 15%, var(--color-base)); color:#93c5fd; font-size:11px; font-weight:600; }
+    .monitor-agent-card .monitor-avatar { flex-basis:40px; height:40px; font-size:14px; }
+    .monitor-agent-card .agent-info { flex:1; min-width:0; }
+    #monitor-name { display:block; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
+    #monitor-role { max-width:95px; padding:3px 6px; border:1px solid #315477; border-radius:6px; color:#83bfff; font-size:10px; overflow-wrap:anywhere; }
+    .monitor-state { display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--color-subtle); }
+    .monitor-state::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+    .monitor-state[data-status="Working"] { color:#4ade80; }
+    .monitor-state[data-status="Idle"] { color:#94a3b8; }
+    .monitor-state[data-status="Waiting for input"] { color:#fbbf24; }
+    .monitor-state[data-status="Failed / awaiting recovery"], .monitor-state[data-status="Failed"] { color:#fb7185; }
+    .monitor-team-agent .agent-state { max-width:90px; font-size:10px; }
+    #monitor-team-summary { color:var(--color-subtle); font-size:10px; margin-bottom:6px; }
+    .monitor-team-agent .agent-open { color:var(--color-subtle); font-size:13px; }
+    .monitor-edit { margin-top: 14px; padding: 10px; border: 1px solid var(--color-border); border-radius: 8px; }
+    .monitor-edit summary { cursor: pointer; font-size: 12px; color: var(--color-soft); }
+    .monitor-edit form label { display: block; margin-top: 12px; font-size: 11px; color: var(--color-dim); }
+    .monitor-edit form input, .monitor-edit form select, .monitor-edit form textarea { width: 100%; margin-top: 4px; padding: 7px; background: var(--color-base); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 5px; font-size: 12px; }
+    #monitor-assignment-form :focus-visible, .monitor-team-agent:focus-visible, #monitor-copy-id:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+    .monitor-edit form button { margin-top: 12px; padding: 7px 12px; border-radius: 5px; background: #2563eb; color: white; font-size: 12px; }
+    #monitor-assignment-message { font-size: 11px; margin-top: 8px; color: var(--color-dim); }
+    #monitor-id { font-family: Menlo, Monaco, monospace; font-size: 10px; }
+    #monitor-copy-id { color: #60a5fa; font-size: 11px; padding: 4px 0; }
+    #monitor-task { white-space: pre-wrap; }
     @media (max-width: 700px) {
-      #session-monitor:not([hidden]) { position: fixed; top: 0; right: 0; bottom: 0; z-index: 210; width: min(270px, 82vw); box-shadow: -18px 0 40px var(--color-shadow); }
-      body.monitor-open #monitor-toggle { position: fixed; right: min(282px, calc(82vw + 12px)); z-index: 215; }
+      #session-monitor:not([hidden]) { position: fixed; top: 0; right: 0; bottom: 0; z-index: 210; width: min(320px, 82vw); box-shadow: -18px 0 40px var(--color-shadow); }
+      body.monitor-open #monitor-toggle { position: fixed; right: min(332px, calc(82vw + 12px)); z-index: 215; }
     }
     #mobile-nav-toggle,
     #mobile-nav-close,
@@ -218,6 +251,7 @@
 
     <!-- Navigation Rail -->
     <nav id="nav-rail" class="w-12 flex-shrink-0 bg-slate-900 border-r border-slate-700/50 flex flex-col items-center py-3 gap-1">
+    <a href="/dashboard.html" class="rail-btn w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800/50" title="Dashboard" aria-label="Open dashboard"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="11" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="18" width="7" height="3" rx="1"/></svg></a>
     <button class="rail-btn relative w-9 h-9 flex items-center justify-center rounded-lg text-slate-200 bg-slate-800 transition-colors" data-panel="chats" title="Sessions">
       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span id="rail-unread" class="hidden absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center" style="background:var(--color-rail-badge-bg);color:var(--color-rail-badge-text)"></span>
@@ -578,18 +612,69 @@
     </div>
   </main>
 
-  <aside id="session-monitor" hidden aria-label="Session details" class="tmx-scroll overflow-y-auto p-4">
-    <div class="flex items-center justify-between border-b pb-3" style="border-color:var(--color-border)"><h2 class="text-sm font-semibold">Session details</h2><span id="monitor-name" class="text-xs truncate ml-2" style="color:var(--color-subtle)"></span></div>
+  <aside id="session-monitor" hidden aria-label="Agent and team details" class="tmx-scroll overflow-y-auto p-4">
+    <div class="flex items-center justify-between"><h2 class="text-sm font-semibold">Agent &amp; team</h2></div>
+    <div class="monitor-agent-card"><span id="monitor-avatar" class="monitor-avatar" aria-hidden="true"></span><div class="agent-info"><span id="monitor-name"></span><span id="monitor-status" class="monitor-state">Unknown</span></div><span id="monitor-role">Not assigned</span></div>
+    <h3 class="monitor-section">Current task</h3>
     <dl>
-      <div class="monitor-row"><dt>Status</dt><dd id="monitor-status">Unknown</dd></div>
+      <div class="monitor-row"><dt>Task</dt><dd id="monitor-task">Not assigned</dd></div>
+      <div class="monitor-row"><dt>Project</dt><dd id="monitor-project">Not assigned</dd></div>
+    </dl>
+    <h3 id="monitor-team-heading" class="monitor-section">Team sessions</h3>
+    <p id="monitor-team-summary" aria-live="polite"></p>
+    <div id="monitor-team" aria-label="Team sessions"></div>
+    <section id="monitor-native-team" hidden><h3 class="monitor-section">Chat agents</h3><p id="monitor-native-summary" class="text-xs" aria-live="polite"></p><div id="monitor-native-members"></div></section>
+    <details class="monitor-edit"><summary>Assignment details</summary><dl>
+      <div class="monitor-row"><dt>Role default recommendation</dt><dd id="monitor-recommendation">Not assigned</dd></div>
+      <div class="monitor-row"><dt>Agent instructions</dt><dd id="monitor-assignment-delivery">Not reported</dd></div>
+      <div class="monitor-row"><dt>Latest activity</dt><dd id="monitor-activity">Not reported</dd></div>
+      <div class="monitor-row"><dt>Team</dt><dd id="monitor-team-name">Not assigned</dd></div>
+      <div class="monitor-row"><dt>Parent agent</dt><dd id="monitor-parent">Not assigned</dd></div>
+    </dl></details>
+    <details id="monitor-assignment" class="monitor-edit">
+      <summary>Edit team &amp; task</summary>
+      <form id="monitor-assignment-form">
+        <fieldset id="monitor-assignment-fields">
+          <label for="monitor-edit-team">Team name or ID</label><input id="monitor-edit-team" name="teamId" maxlength="100" autocomplete="off" placeholder="e.g. CLI Desk redesign">
+          <label for="monitor-edit-role">Role</label><input id="monitor-edit-role" name="role" list="monitor-roles" maxlength="80" autocomplete="off" placeholder="Not assigned">
+          <datalist id="monitor-roles"></datalist>
+          <label for="monitor-edit-parent">Parent agent</label><select id="monitor-edit-parent" name="parentSessionId"><option value="">Not assigned</option></select>
+          <label for="monitor-edit-task">Current task</label><textarea id="monitor-edit-task" name="currentTask" rows="3" maxlength="2000" placeholder="What is this agent working on?"></textarea>
+          <button type="submit">Save assignment</button>
+        </fieldset>
+        <p id="monitor-assignment-message" role="status" aria-live="polite"></p>
+      </form>
+    </details>
+    <details id="monitor-role-defaults" class="monitor-edit">
+      <summary>Edit default roles</summary>
+      <p class="text-xs mt-3" style="color:var(--color-dim)">Recommendations for role assignments. A session's actual model is reported below.</p>
+      <form id="monitor-role-defaults-form">
+        <div id="monitor-role-default-rows"></div>
+        <button type="submit">Save role defaults</button>
+        <p id="monitor-role-defaults-message" role="status" aria-live="polite" class="text-xs mt-2"></p>
+      </form>
+    </details>
+    <h3 class="monitor-section">Model &amp; usage</h3>
+    <dl>
       <div class="monitor-row"><dt>Model</dt><dd id="monitor-model">Unknown</dd></div>
       <div class="monitor-row"><dt>Reasoning</dt><dd id="monitor-reasoning">Unknown</dd></div>
       <div class="monitor-row"><dt>Context used</dt><dd id="monitor-context">Unknown</dd><div id="monitor-progress" role="progressbar" aria-label="Context used"><span></span></div></div>
       <div class="monitor-row"><dt id="monitor-tokens-label">Cumulative tokens</dt><dd id="monitor-cumulative">Unknown</dd></div>
       <div class="monitor-row"><dt>Provider quota</dt><dd id="monitor-quota">Unknown</dd></div>
       <div class="monitor-row"><dt>Provider reported cost</dt><dd id="monitor-cost">Unknown</dd></div>
-      <div class="monitor-row"><dt>Started in</dt><dd id="monitor-cwd">Unknown</dd></div>
-      <div class="monitor-row"><dt>Branch</dt><dd id="monitor-branch">Unknown</dd></div>
+    </dl>
+    <h3 class="monitor-section">Session</h3>
+    <dl>
+      <div class="monitor-row"><dt>Session ID</dt><dd id="monitor-id">Not reported</dd><button id="monitor-copy-id" type="button">Copy session ID</button></div>
+      <div class="monitor-row"><dt>Working folder</dt><dd id="monitor-cwd">Not reported</dd></div>
+      <div class="monitor-row"><dt>Branch</dt><dd id="monitor-branch">Not reported</dd></div>
+    </dl>
+    <h3 class="monitor-section">Master monitor</h3>
+    <dl>
+      <div class="monitor-row"><dt>Connection</dt><dd id="monitor-master">Not reported</dd></div>
+      <div class="monitor-row"><dt>Auto-recovery</dt><dd id="monitor-recovery-enabled">Not reported</dd></div>
+      <div class="monitor-row"><dt>Retries without progress</dt><dd id="monitor-retries">Not reported</dd></div>
+      <div class="monitor-row"><dt>Latest error</dt><dd id="monitor-error">Not reported</dd></div>
     </dl>
   </aside>
 

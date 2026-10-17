@@ -11,6 +11,7 @@ export const state = {
   activePill: null,
   transcriptCache: {},
   remoteVersion: null,
+  masterMonitor: null,
 };
 
 const queuedMessages = [];

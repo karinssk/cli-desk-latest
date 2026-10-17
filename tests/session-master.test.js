@@ -85,13 +85,24 @@ async function check() {
   newOutput.lastOutputAt = new Date(now).toISOString();
   await new Promise(resolve => setTimeout(resolve, 550));
   assert.equal(guardedSent.length, 0); // Approval, manual input, and new output cancel dispatch.
-  const server = http.createServer((req, res) => handleHttp(req, res, { ...api, list: () => [{ id: 'test' }] }));
+  const events = [];
+  const server = http.createServer((req, res) => handleHttp(req, res, { ...api, broadcast: message => events.push(message), list: () => [
+    { id: 'test', presetId: 'codex', startedAt: new Date().toISOString() },
+    { id: 'old', presetId: 'codex', startedAt: '2020-01-01T00:00:00Z' },
+    { id: 'shell', presetId: 'shell', startedAt: new Date().toISOString() },
+  ] }));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
     const url = `http://127.0.0.1:${server.address().port}`;
     const snapshot = await (await fetch(url + '/api/master/sessions')).json();
     assert.equal(snapshot.sessions[0].id, 'test');
     assert.equal(snapshot.sessions[0].recoverableError, false);
+    const header = { 'X-CliDeck-Master': JSON.stringify({ recover: true, all: true, ids: [], timezone: 'Asia/Bangkok' }) };
+    assert.equal((await fetch(url + '/api/master/sessions', { headers: header })).status, 200);
+    assert.deepEqual(events.find(message => message.type === 'master.status').monitor.sessionIds, ['test']);
+    const recovery = events.find(message => message.type === 'session.recovery' && message.id === 'test').recovery;
+    assert.deepEqual([recovery.attempts, recovery.limit, recovery.lastError], [1, 3, 'Bad Request']);
+    assert.equal((await fetch(url + '/api/master/sessions', { headers: { 'X-CliDeck-Master': 'invalid' } })).status, 400);
     assert.equal((await fetch(url + '/api/master/sessions', { headers: { Origin: 'http://example.com' } })).status, 403);
     assert.equal((await fetch(url + '/api/master/continue', { method: 'POST', body: '{' })).status, 400);
     assert.equal((await fetch(url + '/api/master/continue', { method: 'POST', body: 'null' })).status, 400);

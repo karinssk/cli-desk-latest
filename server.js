@@ -232,6 +232,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && req.url.startsWith('/api/session/native-team?')) {
+    require('./native-team').handleHttp(req, res, sessions);
+    return;
+  }
+
   // Session-to-session ask bridge used by the `clideck ask` CLI command.
   if (req.method === 'POST' && req.url === '/api/session/ask') {
     require('./session-ask').handleHttp(req, res, sessions, () => config.load());
