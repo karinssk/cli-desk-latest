@@ -88,6 +88,9 @@ async function lifecycle() {
     assert.equal(live.assignmentDelivery, 'Submitted with message');
     sessions.input({ id, data: '\r' });
     assert.equal(live.pty.writes.pop(), '\r');
+    sessions.refreshRoleNotices(cfg); // same text as already delivered: nothing pasted into the next message
+    sessions.input({ id, data: '\r' });
+    assert.equal(live.pty.writes.pop(), '\r');
     sessions.updateDetails(id, { role: '', currentTask: '', teamId: '' }, cfg);
     sessions.input({ id, data: '\r' });
     assert.ok(live.pty.writes.pop().includes('No role is assigned'));

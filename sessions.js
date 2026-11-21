@@ -136,7 +136,7 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
   if (session.presetId === 'codex') session._codexHome = extraEnv.CODEX_HOME || process.env.CODEX_HOME || join(require('os').homedir(), '.codex');
   sessions.set(id, session);
   if (notice) {
-    if (['codex', 'claude-code'].includes(preset?.presetId) && !launchParts.injectionUnsupported) session.assignmentDelivery = 'Included at startup';
+    if (['codex', 'claude-code'].includes(preset?.presetId) && !launchParts.injectionUnsupported) { session.assignmentDelivery = 'Included at startup'; session._assignmentSent = notice; }
     else queueAssignment(id, session, getConfigFn?.() || {});
   } else session.assignmentDelivery = 'Metadata only (not an AI session)';
   transcript.setFinalizeOnIdle(id, ['claude-code', 'codex', 'gemini-cli', 'opencode', 'pi', 'clideck-agent'].includes(lineageOf(session.presetId)) ? session.presetId : null);
@@ -382,6 +382,7 @@ function input(msg) {
   const submit = data === '\r' || data === '\n' || data.endsWith('\x1b[201~\r');
   if (s._assignmentNotice && submit && !msg.skipAssignment && !s._menuKey && s.working !== true) {
     writeSessionInput(msg.id, data.slice(0, -1) + '\x1b[200~\n\n' + s._assignmentNotice + '\x1b[201~' + data.slice(-1));
+    s._assignmentSent = s._assignmentNotice;
     delete s._assignmentNotice;
     s.assignmentDelivery = 'Submitted with message';
     broadcast({ type: 'session.details', id: msg.id, details: detailsOf(s), assignmentDelivery: s.assignmentDelivery });
@@ -519,7 +520,11 @@ function queueAssignment(id, s, cfg) {
     s.assignmentDelivery = 'Metadata only (not an AI session)';
     return;
   }
-  s._assignmentNotice = assignmentText(id, s, null, cfg);
+  const text = assignmentText(id, s, null, cfg);
+  // Re-send only when the text changed: saving role defaults or the same details again must not
+  // paste the same block into the agent's next message.
+  if (text === s._assignmentSent) { delete s._assignmentNotice; return; }
+  s._assignmentNotice = text;
   s.assignmentDelivery = 'Pending next message';
 }
 
