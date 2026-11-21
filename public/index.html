@@ -211,8 +211,11 @@
     .monitor-state[data-status="Waiting for input"] { color:#fbbf24; }
     .monitor-state[data-status="Failed / awaiting recovery"], .monitor-state[data-status="Failed"] { color:#fb7185; }
     .monitor-team-agent .agent-state { max-width:90px; font-size:10px; }
-    .monitor-team-create { width:100%; margin:2px 0 8px; padding:6px; border:1px dashed var(--color-border, #444); border-radius:6px; color:var(--color-subtle); font-size:11px; }
-    .monitor-team-create:hover { color:var(--color-text); border-color:#60a5fa; }
+    .monitor-team-create { display:flex; gap:6px; margin:2px 0 8px; }
+    .monitor-team-create[hidden] { display:none; }
+    .monitor-team-create select { flex:1; min-width:0; background:var(--color-raised); color:var(--color-text); border:1px solid var(--color-border, #444); border-radius:6px; font-size:11px; padding:4px; }
+    .monitor-team-create button { padding:4px 8px; border:1px dashed var(--color-border, #444); border-radius:6px; color:var(--color-subtle); font-size:11px; white-space:nowrap; }
+    .monitor-team-create button:hover { color:var(--color-text); border-color:#60a5fa; }
     #monitor-team-summary { color:var(--color-subtle); font-size:10px; margin-bottom:6px; }
     .monitor-team-agent .agent-open { color:var(--color-subtle); font-size:13px; }
     .monitor-edit { margin-top: 14px; padding: 10px; border: 1px solid var(--color-border); border-radius: 8px; }
@@ -704,7 +707,14 @@
     </dl>
     <h3 id="monitor-team-heading" class="monitor-section">Team sessions</h3>
     <p id="monitor-team-summary" aria-live="polite"></p>
-    <button id="monitor-team-create" type="button" class="monitor-team-create" hidden title="Open Orchestrator (Opus) + Dev and Dev 2 (Sonnet) in this project folder">+ Create coding team</button>
+    <div id="monitor-team-create" class="monitor-team-create" hidden>
+      <select id="monitor-team-preset" aria-label="Team preset">
+        <option value="coding">Coding · Orchestrator + Dev, Dev 2</option>
+        <option value="hardware">Hardware · Orchestrator + Volt, Forge</option>
+        <option value="marketing">Marketing · Orchestrator + Growth, Content, Social, SEO, TikTok</option>
+      </select>
+      <button id="monitor-team-create-btn" type="button" title="Open the team in this session's project folder">+ Create team</button>
+    </div>
     <div id="monitor-team" aria-label="Team sessions"></div>
     <section id="monitor-native-team" hidden><h3 class="monitor-section">Chat agents</h3><p id="monitor-native-summary" class="text-xs" aria-live="polite"></p><div id="monitor-native-members"></div></section>
     <h3 class="monitor-section">Session</h3>

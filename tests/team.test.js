@@ -18,4 +18,13 @@ assert.equal(r.members[2].name, 'Dev 2');
 assert.throws(() => createTeam({ preset: 'nope' }, api, {}), /Unknown team preset/);
 assert.match(assignmentText('id1', { details: calls[0].details }), /Role guidance: You lead this team/);
 assert.match(assignmentText('id2', { details: calls[1].details }), /Role guidance: Builder on this team/);
+// Specialist presets: persona appended to the system prompt, frontmatter stripped; Orchestrator has none.
+calls.length = 0;
+const hw = createTeam({ preset: 'hardware', projectId: 'p2', cwd: '/tmp' }, api, {});
+assert.deepEqual(hw.members.map(m => `${m.name}/${m.model}`), ['Orchestrator/opus', 'Volt/fable', 'Forge/sonnet']);
+assert.ok(!calls[0].args.includes('--append-system-prompt'));
+const sp = calls[1].args[calls[1].args.indexOf('--append-system-prompt') + 1];
+assert.match(sp, /member of a CliDeck team/);
+assert.ok(!sp.includes('\n---\n') && !sp.startsWith('---'));
+assert.equal(createTeam({ preset: 'marketing', projectId: 'p3', cwd: '/tmp' }, api, {}).members.length, 6);
 console.log('team tests passed');

@@ -1,16 +1,36 @@
 // `clideck team create <preset>`: opens a full agent team (one teamId, roles, parent = Orchestrator) in one call.
-// Long-running builders get their own CliDeck sessions; short jobs (design, review, test) run as the
+// Long-running specialists get their own CliDeck sessions; short jobs (planning, review, test) run as the
 // Orchestrator's Claude Code subagents, which start fresh and return only a summary (cheaper).
 const crypto = require('crypto');
 const { sendJson, isLoopback } = require('./http-util');
 
+const fs = require('fs');
+const { join } = require('path');
+
+// Members with a persona get it as an appended system prompt (personas copied from the AI Agency bot).
 const PRESETS = {
   coding: [
     { name: 'Orchestrator', role: 'Orchestrator', model: 'opus' },
     { name: 'Dev', role: 'Dev', model: 'sonnet' },
     { name: 'Dev 2', role: 'Dev', model: 'sonnet' },
   ],
+  hardware: [
+    { name: 'Orchestrator', role: 'Orchestrator', model: 'opus' },
+    { name: 'Volt', role: 'Electronics', model: 'fable', persona: 'engineering-electronics-pcb-engineer' },
+    { name: 'Forge', role: 'Mechanical', model: 'sonnet', persona: 'engineering-mechanical-3d-designer' },
+  ],
+  marketing: [
+    { name: 'Orchestrator', role: 'Orchestrator', model: 'opus' },
+    { name: 'Growth', role: 'Growth', model: 'sonnet', persona: 'marketing-growth-hacker' },
+    { name: 'Content', role: 'Content', model: 'sonnet', persona: 'marketing-content-creator' },
+    { name: 'Social', role: 'Social', model: 'sonnet', persona: 'marketing-social-media-strategist' },
+    { name: 'SEO', role: 'SEO', model: 'sonnet', persona: 'marketing-seo-specialist' },
+    { name: 'TikTok', role: 'TikTok', model: 'sonnet', persona: 'marketing-tiktok-strategist' },
+  ],
 };
+const MEMBER_NOTE = 'You are a member of a CliDeck team. Take tasks from your Orchestrator (your parent session), do only the brief, save deliverables as files in the working folder, and report what you made with ATTACH lines. Ask the Orchestrator if the brief is unclear. Never publish, post, send messages or spend money unless the brief says the user approved it.';
+const persona = name => fs.readFileSync(join(__dirname, 'team-personas', `${name}.md`), 'utf8').replace(/\r\n/g, '\n').replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+
 // Compact at 200K instead of growing to 1M: every tool turn re-reads the whole context.
 const TEAM_ENV = { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '200000' };
 
@@ -23,7 +43,7 @@ function createTeam({ preset = 'coding', projectId = null, cwd } = {}, sessionsA
   let parent = null;
   for (const m of members) {
     const name = taken.has(m.name.toLowerCase()) ? `${m.name} ${teamId.slice(-4)}` : m.name;
-    const r = sessionsApi.createProgrammatic({ presetId: 'claude-code', name, projectId, cwd, args: ['--model', m.model], env: TEAM_ENV,
+    const r = sessionsApi.createProgrammatic({ presetId: 'claude-code', name, projectId, cwd, args: ['--model', m.model, ...(m.persona ? ['--append-system-prompt', `${MEMBER_NOTE}\n\n${persona(m.persona)}`] : [])], env: TEAM_ENV,
       details: { teamId, role: m.role, parentSessionId: parent, currentTask: '' } }, cfg);
     if (r.error) throw Object.assign(new Error(`${name}: ${r.error}${created.length ? ` (already opened: ${created.map(c => c.name).join(', ')})` : ''}`), { status: 409 });
     created.push({ id: r.id, name, role: m.role, model: m.model });

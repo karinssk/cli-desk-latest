@@ -444,11 +444,12 @@ async function refreshNativeTeam() {
 }
 setInterval(() => { if (!panel.hidden) { renderSessionMonitor(); refreshNativeTeam(); } }, 5000);
 
-document.getElementById('monitor-team-create').addEventListener('click', e => {
+document.getElementById('monitor-team-create-btn').addEventListener('click', e => {
   if (!state.active) return;
-  e.currentTarget.disabled = true;
-  setTimeout(() => { e.currentTarget.disabled = false; }, 3000);
-  send({ type: 'team.create', id: state.active, preset: 'coding' });
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  setTimeout(() => { btn.disabled = false; }, 3000);
+  send({ type: 'team.create', id: state.active, preset: document.getElementById('monitor-team-preset').value });
 });
 export function teamCreated(msg) {
   showToast(`${msg.members.map(m => m.name).join(', ')} opened. Give your task to ${msg.members[0].name}.`, { title: `Team ${msg.teamId}`, duration: 6000 });
