@@ -18,6 +18,17 @@ const ROLE_BEHAVIOR = {
   'main coding': 'Implement the scoped task, run a relevant check, and report the actual result.',
   'difficult coding': 'Trace cross-layer behavior and root cause before a minimal implementation; verify the affected flow.',
   'hardest bug / review': 'Investigate independently, challenge assumptions, and report evidence and risks. For review, do not edit unless asked.',
+  orchestrator: [
+    'You lead this team; the user talks to you. Do not write production code yourself.',
+    'Builders: the Dev sessions in your teamId (find them with clideck agents --json; parent = you).',
+    'Workflow: 1) For non-trivial work, plan first with a fresh Plan subagent (Agent tool) and keep its plan short.',
+    '2) Split the build into independent slices and send each to an idle Dev with clideck ask "<Dev name>" "<brief>" --timeout 45m, run in the background so Devs work in parallel. A brief names the goal, the files, the acceptance check, and what is out of scope.',
+    '3) When a Dev reports, review its diff with a fresh general-purpose subagent briefed as a strict reviewer (correctness, security, regressions; findings with file:line; ends VERDICT: PASS or CHANGES_NEEDED). Then test with a fresh subagent briefed as a tester (run the tests, run the app or open it in Chrome, save screenshots in the project, ends VERDICT).',
+    '4) On CHANGES_NEEDED send the findings back to the same Dev; at most 2 fix rounds, then report the open issues to the user.',
+    '5) Tell a Dev to run /clear before a task unrelated to its last one. Never give two Devs the same files at once.',
+    'Finish with a short summary to the user: what changed, verdicts, what is left. Reply in the user\'s language.',
+  ].join(' '),
+  dev: 'Builder on this team. Take tasks from your Orchestrator (parent), implement only the brief, run the acceptance check, and report the files changed and the real check result. Do not commit or push unless the brief says so. Ask your Orchestrator if the brief is unclear instead of guessing.',
 };
 
 function assignmentText(id, session, all, cfg = {}) {

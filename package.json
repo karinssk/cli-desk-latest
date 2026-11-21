@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/tasks.test.js && node tests/claude-context.test.js && node tests/single-instance.test.js && node tests/clipboard-image.test.js && node tests/session-monitor.test.js && node tests/session-master.test.js && node tests/master-monitor.test.js && node tests/session-details.test.js && node tests/agent-role-guide.test.js && node tests/native-team.test.js",
+    "test": "node tests/team.test.js && node tests/tasks.test.js && node tests/claude-context.test.js && node tests/single-instance.test.js && node tests/clipboard-image.test.js && node tests/session-monitor.test.js && node tests/session-master.test.js && node tests/master-monitor.test.js && node tests/session-details.test.js && node tests/agent-role-guide.test.js && node tests/native-team.test.js",
     "test:sidebar": "node tests/sidebar-ui.test.js && node tests/sidebar-ui.test.js --mobile",
     "test:dashboard": "node tests/dashboard-ui.test.js && node tests/dashboard-ui.test.js --mobile",
     "build:css": "tailwindcss -i src/input.css -o public/tailwind.css --minify",

@@ -391,6 +391,15 @@ function onConnection(ws) {
         });
         break;
       }
+      case 'team.create': {
+        const from = sessions.getSessions().get(msg.id);
+        try {
+          if (!from) throw new Error('Session not active');
+          const r = require('./team').createTeam({ preset: msg.preset || 'coding', projectId: from.projectId || null, cwd: from.cwd }, sessions, cfg);
+          ws.send(JSON.stringify({ type: 'team.created', ...r }));
+        } catch (e) { ws.send(JSON.stringify({ type: 'error', message: e.message })); }
+        break;
+      }
       case 'tasks.get':
         ws.send(JSON.stringify({ type: 'tasks', id: msg.id || null, tasks: require('./tasks').list(msg.id) }));
         break;

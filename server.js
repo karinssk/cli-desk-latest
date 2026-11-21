@@ -237,6 +237,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // `clideck team create <preset>`: opens a full agent team next to the caller session.
+  if (req.method === 'POST' && req.url === '/api/team/create') {
+    require('./team').handleHttp(req, res, sessions, () => config.load());
+    return;
+  }
+
   // Session-to-session ask bridge used by the `clideck ask` CLI command.
   if (req.method === 'POST' && req.url === '/api/session/ask') {
     require('./session-ask').handleHttp(req, res, sessions, () => config.load());

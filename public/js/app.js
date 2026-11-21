@@ -1,5 +1,5 @@
 import { state, send, flushQueuedSends } from './state.js';
-import { setSessionMonitor, setSessionDetails, renderSessionMonitor, initializeSessionMonitor, assignmentResult, refreshRoleDefaults, renderContextUsage, renderPlanUsage } from './monitor-sidebar.js';
+import { setSessionMonitor, setSessionDetails, renderSessionMonitor, initializeSessionMonitor, assignmentResult, refreshRoleDefaults, renderContextUsage, renderPlanUsage, teamCreated } from './monitor-sidebar.js';
 import { esc, binName, resolveIconPath, randomUUID } from './utils.js';
 import { addTerminal, removeTerminal, select, startRename, startProjectRename, setSessionTheme, openMenu, closeMenu, setStatus, updateMuteIndicator, updatePreview, markUnread, applyFilter, setTab, renderResumable, regroupSessions, toggleProjectCollapse, setSessionProject, estimateSize, restartComplete, positionMenu, addPill, updatePill, removePill, appendPillLog, setPillLogs, closePillLog, addTerminalInputAction, removeTerminalInputActionsForPlugin, trackTerminalInputData, copySessionName } from './terminals.js';
 import { renderSettings, updateVersionFooter } from './settings.js';
@@ -157,6 +157,7 @@ function connect() {
       case 'session.monitor':
         setSessionMonitor(msg.id, msg.monitor, undefined, msg.statusKnown);
         break;
+      case 'team.created': teamCreated(msg); break;
       case 'tasks':
         setTasks(msg.tasks);
         break;

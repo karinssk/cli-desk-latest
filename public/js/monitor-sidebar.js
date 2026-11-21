@@ -188,6 +188,7 @@ export function renderSessionMonitor() {
     ? peer.details?.teamId === details.teamId
     : peerId === id || (entry?.projectId && peer.projectId === entry.projectId && !peer.details?.teamId));
   document.getElementById('monitor-team-heading').textContent = details.teamId ? 'Team sessions' : 'Project sessions · no team assigned';
+  document.getElementById('monitor-team-create').hidden = !!details.teamId || !/claude/.test(entry?.presetId || '');
   const counts = new Map();
   for (const [, peer] of peers) counts.set(sessionStatus(peer), (counts.get(sessionStatus(peer)) || 0) + 1);
   document.getElementById('monitor-team-summary').textContent = [...counts].map(([status, count]) => `${count} ${status.toLowerCase()}`).join(' · ');
@@ -442,3 +443,13 @@ async function refreshNativeTeam() {
   } finally { nativeRequest = false; renderSessionMonitor(); }
 }
 setInterval(() => { if (!panel.hidden) { renderSessionMonitor(); refreshNativeTeam(); } }, 5000);
+
+document.getElementById('monitor-team-create').addEventListener('click', e => {
+  if (!state.active) return;
+  e.currentTarget.disabled = true;
+  setTimeout(() => { e.currentTarget.disabled = false; }, 3000);
+  send({ type: 'team.create', id: state.active, preset: 'coding' });
+});
+export function teamCreated(msg) {
+  showToast(`${msg.members.map(m => m.name).join(', ')} opened. Give your task to ${msg.members[0].name}.`, { title: `Team ${msg.teamId}`, duration: 6000 });
+}

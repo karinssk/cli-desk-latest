@@ -12,6 +12,7 @@ function usage() {
     '  clideck master --today [--recover --all | --recover --session <id>]',
     '  clideck ask status [--json] [--all]',
     '  clideck ask --session <name-or-id> --message <text> [--timeout 10m]',
+    '  clideck team create [preset]   Open a full agent team (default preset: coding)',
     '',
     'Options:',
     '  --host <host>     Host to bind. Default: 127.0.0.1. Use 0.0.0.0 for LAN access.',
@@ -71,6 +72,8 @@ if (args[0] === 'master') {
   require('../clideck-master-cli').run(args.slice(1));
 } else if (args[0] === 'agents') {
   require('../clideck-agents-cli').run(args.slice(1));
+} else if (args[0] === 'team') {
+  require('../clideck-team-cli').run(args.slice(1));
 } else if (args[0] === 'ask') {
   require('../clideck-ask-cli').run(args.slice(1));
 } else if (args.includes('--help') || args.includes('-h')) {

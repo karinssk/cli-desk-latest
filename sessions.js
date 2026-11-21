@@ -124,7 +124,8 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
   try {
     term = pty.spawn(launchParts[0], launchParts.slice(1), {
       name: 'xterm-256color', cols: cols || 80, rows: rows || 24, cwd,
-      env: { ...process.env, ...utf8LocaleEnv(), ...extraEnv, ...telemetryEnv, ...colorEnv },
+      // CliDeck's bin first on PATH so agents can run `clideck agents|ask|team` without a global install.
+      env: { ...process.env, PATH: join(__dirname, 'bin') + require('path').delimiter + (process.env.PATH || ''), ...utf8LocaleEnv(), ...extraEnv, ...telemetryEnv, ...colorEnv },
     });
   } catch (e) {
     return e;
@@ -183,7 +184,7 @@ function spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken,
     if (!s.ephemeral && cmd.canResume && cmd.resumeCommand && s.sessionToken) {
       resumable.push({
         id, name: s.name, commandId: s.commandId, presetId: s.presetId || 'shell', cwd: s.cwd,
-        themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted, details: detailsOf(s),
+        themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted, details: detailsOf(s), launch: s.launch,
         lastPreview: s.lastPreview || '', lastActivityAt: s.lastActivityAt || null,
         savedAt: new Date().toISOString(),
       });
@@ -255,6 +256,14 @@ function create(msg, ws, cfg) {
   }
 }
 
+// Per-session launch additions (team members: --model, compact window), kept across resume/restart.
+// Copies the command so the saved preset is untouched.
+function withLaunch(cmd, parts, launch) {
+  if (!launch) return [cmd, parts];
+  const env = launch.env && typeof launch.env === 'object' ? { ...(cmd.env || {}), ...launch.env } : cmd.env;
+  return [{ ...cmd, env }, [...parts, ...(Array.isArray(launch.args) ? launch.args.map(String) : [])]];
+}
+
 // --- Programmatic session creation (for plugins / internal use) ---
 
 function createProgrammatic(opts, cfg) {
@@ -263,8 +272,9 @@ function createProgrammatic(opts, cfg) {
   if (opts.presetId) cmd = cfg.commands.find(c => c.presetId === opts.presetId);
   else if (opts.commandId) cmd = cfg.commands.find(c => c.id === opts.commandId);
   if (!cmd) return { error: 'Command not found' };
-
-  const parts = parseCommand(cmd.command);
+  const launch = opts.args || opts.env ? { args: opts.args || [], env: opts.env || {} } : null;
+  let parts;
+  [cmd, parts] = withLaunch(cmd, parseCommand(cmd.command), launch);
   const cwd = resolveValidDir(opts.cwd || cmd.defaultPath || cfg.defaultPath);
   const themeId = opts.themeId || cfg.defaultTheme || 'default';
   const name = opts.name || cmd.label;
@@ -273,11 +283,12 @@ function createProgrammatic(opts, cfg) {
     return { error: `Agent name "${name}" is already taken in this project.` };
   }
 
-  const err = spawnSession(id, cmd, parts, cwd, name, themeId, cmd.id, null, projectId);
+  const err = spawnSession(id, cmd, parts, cwd, name, themeId, cmd.id, null, projectId, undefined, undefined, opts.details);
   if (err) return { error: err.message };
 
   const s = sessions.get(id);
   if (s && opts.ephemeral) s.ephemeral = true;
+  if (s && launch) s.launch = launch;
 
   const presetId = matchPreset(cmd)?.presetId || 'shell';
   broadcast({ type: 'created', id, name, themeId, commandId: cmd.id, presetId, projectId, cwd, details: detailsOf(s) });
@@ -309,11 +320,11 @@ function resume(msg, ws, cfg) {
     resumeStr = resumeStr.replace('{{sessionId}}', saved.sessionToken);
   }
 
-  const parts = parseCommand(resumeStr);
+  const [launchCmd, parts] = withLaunch(cmd, parseCommand(resumeStr), saved.launch);
   const cwd = resolveValidDir(saved.cwd || cfg.defaultPath);
   const id = saved.id;
 
-  const err = spawnSession(id, cmd, parts, cwd, saved.name, saved.themeId || saved.profileId || 'default', saved.commandId, saved.sessionToken, saved.projectId, undefined, undefined, saved.details);
+  const err = spawnSession(id, launchCmd, parts, cwd, saved.name, saved.themeId || saved.profileId || 'default', saved.commandId, saved.sessionToken, saved.projectId, undefined, undefined, saved.details);
   if (err) {
     console.error('Failed to resume pty:', err.message);
     ws.send(JSON.stringify({ type: 'error', message: err.message }));
@@ -323,6 +334,7 @@ function resume(msg, ws, cfg) {
   const s = sessions.get(id);
   if (s) {
     if (saved.muted) s.muted = true;
+    if (saved.launch) s.launch = saved.launch;
   }
 
   // Remove from resumable list and notify all clients
@@ -436,7 +448,8 @@ function restart(msg, ws, cfg) {
   }
 
   const savedToken = s.sessionToken;
-  const { name, cwd, commandId, projectId, muted, lastPreview, lastActivityAt, details } = s;
+  const { name, cwd, commandId, projectId, muted, lastPreview, lastActivityAt, details, launch } = s;
+  const [launchCmd, launchParts] = withLaunch(cmd, parts, launch);
 
   activity.clear(id);
   telemetry.clear(id);
@@ -447,7 +460,7 @@ function restart(msg, ws, cfg) {
   s.pty.kill();
   sessions.delete(id);
 
-  const err = spawnSession(id, cmd, parts, cwd, name, themeId, commandId, savedToken, projectId, msg.cols, msg.rows, details);
+  const err = spawnSession(id, launchCmd, launchParts, cwd, name, themeId, commandId, savedToken, projectId, msg.cols, msg.rows, details);
   if (err) {
     console.error('[restart] spawn failed:', err.message);
     broadcast({ type: 'session.restarted', id, error: err.message });
@@ -459,6 +472,7 @@ function restart(msg, ws, cfg) {
     next.muted = !!muted;
     next.lastPreview = lastPreview || '';
     next.lastActivityAt = lastActivityAt || null;
+    if (launch) next.launch = launch;
   }
 
   broadcast({ type: 'session.restarted', id, resumed: !!canResume, details: detailsOf(next) });
@@ -578,7 +592,7 @@ function saveSessions(cfg) {
     })
     .map(([id, s]) => ({
       id, name: s.name, commandId: s.commandId, presetId: s.presetId || 'shell', cwd: s.cwd,
-      themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted, details: detailsOf(s),
+      themeId: s.themeId, sessionToken: s.sessionToken, projectId: s.projectId, muted: !!s.muted, details: detailsOf(s), launch: s.launch,
       lastPreview: s.lastPreview || '', lastActivityAt: s.lastActivityAt || null,
       savedAt: new Date().toISOString(),
     }));
