@@ -39,6 +39,7 @@ telemetry.init(sessions.broadcast, sessions.getSessions);
 require('./opencode-bridge').init(sessions.broadcast, sessions.getSessions);
 require('./pi-bridge').init(sessions.broadcast, sessions.getSessions);
 const config = require('./config');
+require('./claude-context').startUsagePush(sessions);
 plugins.init(sessions.broadcast, sessions.getSessions, () => require('./handlers').getConfig(), (cfg) => config.save(cfg), sessions.input, sessions.createProgrammatic, sessions.close);
 
 const MIME = {

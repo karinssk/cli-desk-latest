@@ -382,7 +382,8 @@ export function renderContextUsage() {
   box.append(el('p', 'ctx-note', c.loading ? 'Refreshing…' : c.error ? `Refresh failed: ${c.error}` : `${d.model || ''} · as of ${new Date(c.at).toLocaleTimeString()}`));
 }
 
-// Plan limits (5-hour / weekly) from `claude /usage`; account-wide, refreshed at most every 2 minutes.
+// Plan limits (5-hour / weekly) from `claude /usage`; account-wide. The server pushes updates after each
+// Claude turn and every 60s; this request only covers the first load and the Refresh button.
 function requestUsage(force) {
   if (state.usage?.loading || (!force && state.usage?.at && Date.now() - state.usage.at < 120000)) return;
   state.usage = { ...state.usage, loading: true };
@@ -407,6 +408,7 @@ export function renderPlanUsage() {
     box.append(det);
   }
   if (u.error) box.append(el('p', 'ctx-note', `Refresh failed: ${u.error}`));
+  else if (u.at) { const s = Math.round((Date.now() - u.at) / 1000); box.append(el('p', 'ctx-note', `Live · updated ${s < 60 ? `${s}s` : `${Math.round(s / 60)}m`} ago`)); }
 }
 
 document.getElementById('monitor-ctx-refresh').addEventListener('click', () => { if (state.active) requestContext(state.active); requestUsage(true); });

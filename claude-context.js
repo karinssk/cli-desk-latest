@@ -66,8 +66,8 @@ function parseUsage(text) {
 }
 
 let usageCache = null;
-function claudeUsage() {
-  if (usageCache && Date.now() - usageCache.at < 60000) return usageCache.p;
+function claudeUsage(maxAgeMs = 60000) {
+  if (usageCache && Date.now() - usageCache.at < maxAgeMs) return usageCache.p;
   const p = new Promise((resolve, reject) => {
     execFile('claude', ['-p', '--output-format', 'json', '/usage'], { cwd: os.homedir(), timeout: 30000, env: { ...process.env, CLIDECK_SESSION_ID: '' } }, (err, stdout) => {
       let j; try { j = JSON.parse(stdout); } catch { return reject(new Error(err?.message?.slice(0, 200) || 'claude returned no JSON')); }
@@ -81,4 +81,22 @@ function claudeUsage() {
   return p;
 }
 
-module.exports = { parseContext, claudeContext, parseUsage, claudeUsage };
+// Live plan usage: push to every client right after a Claude turn ends (when usage moves), and every
+// 60s while a browser is open (catches use outside CliDeck, e.g. the Discord bot). /usage costs no tokens,
+// only ~6s of CPU, so pushes are debounced and at least 20s apart.
+function startUsagePush(sessionsApi) {
+  let timer = null, last = 0;
+  const push = () => {
+    timer = null;
+    if (![...sessionsApi.clients].some(c => c.readyState === 1)) return;
+    last = Date.now();
+    claudeUsage(15000).then(usage => sessionsApi.broadcast({ type: 'usage', usage, at: Date.now() }), () => {});
+  };
+  const schedule = delay => { if (!timer) timer = setTimeout(push, Math.max(delay, last + 20000 - Date.now())); };
+  sessionsApi.addBroadcastListener(msg => {
+    if (msg.type === 'session.status' && msg.working === false && /claude/.test(sessionsApi.getSessions().get(msg.id)?.presetId || '')) schedule(5000);
+  });
+  setInterval(() => schedule(0), 60000).unref();
+}
+
+module.exports = { parseContext, claudeContext, parseUsage, claudeUsage, startUsagePush };
