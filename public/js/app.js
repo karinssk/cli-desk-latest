@@ -1,5 +1,5 @@
 import { state, send, flushQueuedSends } from './state.js';
-import { setSessionMonitor, setSessionDetails, renderSessionMonitor, initializeSessionMonitor, assignmentResult, refreshRoleDefaults } from './monitor-sidebar.js';
+import { setSessionMonitor, setSessionDetails, renderSessionMonitor, initializeSessionMonitor, assignmentResult, refreshRoleDefaults, renderContextUsage, renderPlanUsage } from './monitor-sidebar.js';
 import { esc, binName, resolveIconPath, randomUUID } from './utils.js';
 import { addTerminal, removeTerminal, select, startRename, startProjectRename, setSessionTheme, openMenu, closeMenu, setStatus, updateMuteIndicator, updatePreview, markUnread, applyFilter, setTab, renderResumable, regroupSessions, toggleProjectCollapse, setSessionProject, estimateSize, restartComplete, positionMenu, addPill, updatePill, removePill, appendPillLog, setPillLogs, closePillLog, addTerminalInputAction, removeTerminalInputActionsForPlugin, trackTerminalInputData, copySessionName } from './terminals.js';
 import { renderSettings, updateVersionFooter } from './settings.js';
@@ -13,6 +13,7 @@ import './nav.js';
 import { initDrag, wasDragging } from './drag.js';
 import { registerHotkey, unregisterHotkey, unregisterAllForPlugin } from './hotkeys.js';
 import { renderPrompts } from './prompts.js';
+import { setTasks, updateTask } from './task-pane.js';
 
 const shownAgentHealthToasts = new Set();
 let reconnectReplaySkip = null;
@@ -155,6 +156,22 @@ function connect() {
       case 'session.monitor':
         setSessionMonitor(msg.id, msg.monitor, undefined, msg.statusKnown);
         break;
+      case 'tasks':
+        setTasks(msg.tasks);
+        break;
+      case 'task.update':
+        updateTask(msg.task);
+        break;
+      case 'usage':
+        state.usage = { data: msg.usage || state.usage?.data, at: msg.at || state.usage?.at, error: msg.error };
+        renderPlanUsage();
+        break;
+      case 'session.context': {
+        const entry = state.terms.get(msg.id);
+        if (entry) entry.contextUsage = { data: msg.context || entry.contextUsage?.data, at: msg.at || entry.contextUsage?.at, error: msg.error };
+        renderContextUsage();
+        break;
+      }
       case 'session.details':
         setSessionDetails(msg.id, msg.details, msg.branch, msg.assignmentDelivery);
         break;

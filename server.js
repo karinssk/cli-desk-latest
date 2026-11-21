@@ -243,6 +243,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Files an agent attached to a task report (ATTACH: lines), by index only; local requests only.
+  const taskFile = req.method === 'GET' && /^\/task-files\/([0-9a-f-]{36})\/(\d+)$/.exec(req.url);
+  if (taskFile) {
+    const file = require('./http-util').isLoopback(req) && require('./tasks').filePath(taskFile[1], +taskFile[2]);
+    let now = null; try { now = file && require('fs').realpathSync(file); } catch {}
+    if (!file || now !== file) return res.writeHead(404).end(); // swapped for a symlink after the check: refuse
+    const types = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.pdf': 'application/pdf' };
+    const ext = require('path').extname(file).toLowerCase();
+    res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+      ...(ext === '.svg' ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}),
+      ...(types[ext] ? {} : { 'Content-Disposition': `attachment; filename="${require('path').basename(file).replace(/"/g, '')}"` }) });
+    require('fs').createReadStream(file).on('error', () => res.end()).pipe(res);
+    return;
+  }
+
   // Agent discovery bridge used by the `clideck agents` CLI command.
   if (req.method === 'GET' && req.url.startsWith('/api/session/agents')) {
     require('./session-agents').handleHttp(req, res, sessions, () => config.load());

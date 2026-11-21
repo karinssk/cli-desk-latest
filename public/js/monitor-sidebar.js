@@ -131,41 +131,53 @@ export function renderSessionMonitor() {
   field('quota', m.quota);
   field('cost', m.cost);
   field('cwd', entry?.cwd);
+  renderContextUsage();
   field('branch', entry?.branch ?? m.branch);
+  hideEmptyRows();
+  renderPlanUsage();
 
   const nativeSection = document.getElementById('monitor-native-team');
   const nativeMembers = document.getElementById('monitor-native-members');
   nativeMembers.replaceChildren();
   nativeSection.hidden = !entry?.nativeTeams?.length && !entry?.nativeTeamError;
-  document.getElementById('monitor-native-summary').textContent = entry?.nativeTeamError || 'Native helpers, including history · unknown means runtime not observed · refreshes every 5s';
+  document.getElementById('monitor-native-summary').textContent = entry?.nativeTeamError || 'Turn activity refreshes every 5s · stale activity stays Unknown';
   for (const nativeTeam of entry?.nativeTeams || []) {
     const heading = document.createElement('h4');
     heading.className = 'monitor-section';
     heading.textContent = nativeTeam.name;
     nativeMembers.append(heading);
-    for (const member of nativeTeam.members) {
-      const row = document.createElement('div');
-      row.className = 'monitor-team-agent';
-      row.dataset.nativeId = member.id;
-      row.title = `${nativeTeam.name}\n${member.role}\n${member.model} ${member.reasoning}\n${member.id}\n${member.source || 'Reported team metadata'}\nLast reported: ${member.lastSeenAt || 'Unknown'}`;
-      const avatar = document.createElement('span');
-      avatar.className = 'monitor-avatar';
-      avatar.setAttribute('aria-hidden', 'true');
-      avatar.textContent = initials(member.name);
-      const info = document.createElement('span');
-      info.className = 'agent-info';
-      const name = document.createElement('span');
-      name.className = 'agent-title';
-      name.textContent = member.name;
-      const role = document.createElement('small');
-      role.textContent = `${member.role} · ${member.model || 'Model not reported'}${member.reasoning ? ' / ' + member.reasoning : ''} · ${member.id.slice(0, 8)}`;
-      info.append(name, role);
-      const status = document.createElement('span');
-      status.className = 'agent-state monitor-state';
-      status.dataset.status = member.status;
-      status.textContent = member.status;
-      row.append(avatar, info, status);
-      nativeMembers.append(row);
+    for (const [group, members] of [['Not confirmed finished', nativeTeam.members.filter(member => !['Finished', 'Stopped', 'Failed'].includes(member.status))], ['History', nativeTeam.members.filter(member => ['Finished', 'Stopped', 'Failed'].includes(member.status))]]) {
+      if (!members.length) continue;
+      const groupHeading = document.createElement('p');
+      groupHeading.className = 'monitor-native-group';
+      groupHeading.textContent = `${group} · ${members.length}`;
+      nativeMembers.append(groupHeading);
+      for (const member of members) {
+        const row = document.createElement('div');
+        row.className = 'monitor-team-agent';
+        row.dataset.nativeId = member.id;
+        row.title = `${nativeTeam.name}\n${member.role}\n${member.model} ${member.reasoning}\n${member.id}\n${member.source || 'Reported team metadata'}\nLast reported: ${member.lastSeenAt || 'Unknown'}`;
+        const avatar = document.createElement('span');
+        avatar.className = 'monitor-avatar';
+        avatar.setAttribute('aria-hidden', 'true');
+        avatar.textContent = initials(member.name);
+        const info = document.createElement('span');
+        info.className = 'agent-info';
+        const name = document.createElement('span');
+        name.className = 'agent-title';
+        name.textContent = member.name;
+        const role = document.createElement('small');
+        role.textContent = `${member.role} · ${member.model || 'Model not reported'}${member.reasoning ? ' / ' + member.reasoning : ''} · ${member.id.slice(0, 8)}`;
+        const seen = document.createElement('small');
+        seen.textContent = member.lastSeenAt ? `Last report: ${new Date(member.lastSeenAt).toLocaleString()}` : 'Last report: Unknown';
+        info.append(name, role, seen);
+        const status = document.createElement('span');
+        status.className = 'agent-state monitor-state';
+        status.dataset.status = member.status;
+        status.textContent = member.status;
+        row.append(avatar, info, status);
+        nativeMembers.append(row);
+      }
     }
   }
 
@@ -307,6 +319,96 @@ form.addEventListener('submit', event => {
   if (sent) form.dataset.requestId = requestId;
   document.getElementById('monitor-assignment-message').textContent = sent ? 'Saving…' : 'Disconnected. Reconnect before saving.';
 });
+
+// Compact view: rows with nothing to report are hidden, and so is a section whose rows are all hidden.
+const EMPTY = new Set(['Not reported', 'Unknown', 'Not assigned', '']);
+function hideEmptyRows() {
+  for (const dl of panel.querySelectorAll(':scope > dl')) {
+    for (const row of dl.querySelectorAll('.monitor-row')) row.hidden = EMPTY.has(row.querySelector('dd')?.textContent.trim());
+    const h = dl.previousElementSibling;
+    if (h?.matches('h3.monitor-section')) h.hidden = ![...dl.children].some(row => !row.hidden);
+  }
+}
+
+// Context breakdown (Claude Code /context, run on a fork of the session by the server).
+const CTX_COLORS = { 'Messages': '#5b8def', 'MCP tools': '#e0703a', 'System tools': '#3fae7a', 'System prompt': '#d99a2b' };
+const CTX_TAIL = /free space|autocompact|deferred/i;
+const fmtK = n => n == null ? '—' : n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}K` : String(n);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+function requestContext(id) {
+  const entry = state.terms.get(id);
+  if (!entry || entry.contextUsage?.loading) return;
+  entry.contextUsage = { ...entry.contextUsage, loading: true, error: null };
+  if (!send({ type: 'session.context.get', id })) entry.contextUsage = { ...entry.contextUsage, loading: false, error: 'Disconnected' };
+  renderContextUsage();
+}
+
+export function renderContextUsage() {
+  if (panel.hidden) return;
+  const box = document.getElementById('monitor-ctx');
+  const entry = state.terms.get(state.active);
+  const isClaude = /claude/.test(entry?.presetId || '');
+  document.getElementById('monitor-ctx-refresh').hidden = !isClaude;
+  if (isClaude && !entry.contextUsage) return requestContext(state.active); // first view loads once; Refresh for more
+  const c = entry?.contextUsage, d = c?.data;
+  box.replaceChildren();
+  box.hidden = box.previousElementSibling.hidden = !isClaude;
+  if (!isClaude) return;
+  if (!d) { box.append(el('p', 'ctx-note', c?.loading ? 'Loading… (runs /context on a copy of the session)' : c?.error || 'Not loaded')); return; }
+  const head = el('div', 'ctx-head');
+  head.append(el('span', '', `${d.percent ?? '—'}% used`), el('span', '', `${fmtK(d.used)} / ${fmtK(d.window)}`));
+  const bar = el('div', 'ctx-bar');
+  const color = name => CTX_COLORS[name] || (CTX_TAIL.test(name) ? 'var(--color-muted)' : '#8a8f98');
+  for (const cat of d.categories.filter(x => !CTX_TAIL.test(x.name))) {
+    const seg = el('span'); seg.style.cssText = `width:${cat.percent}%;background:${color(cat.name)}`; bar.append(seg);
+  }
+  box.append(head, bar);
+  const row = cat => {
+    const r = el('div', 'ctx-row'), dot = el('i'); dot.style.background = color(cat.name);
+    r.append(dot, el('span', '', cat.name), el('span', '', fmtK(cat.tokens)), el('span', '', /deferred/i.test(cat.name) ? '—' : `${cat.percent}%`));
+    return r;
+  };
+  const main = d.categories.filter(x => !CTX_TAIL.test(x.name)).sort((a, b) => b.tokens - a.tokens);
+  const tail = d.categories.filter(x => CTX_TAIL.test(x.name)).sort((a, b) => /deferred/i.test(a.name) - /deferred/i.test(b.name));
+  box.append(...main.map(row), el('div', 'ctx-gap'), ...tail.map(row), el('div', 'ctx-gap'));
+  for (const list of d.lists) {
+    const det = el('details'), sum = el('summary');
+    sum.append(el('span', '', list.name), el('span', '', String(list.items.length)));
+    det.append(sum, ...list.items.map(item => el('div', '', item)));
+    box.append(det);
+  }
+  box.append(el('p', 'ctx-note', c.loading ? 'Refreshing…' : c.error ? `Refresh failed: ${c.error}` : `${d.model || ''} · as of ${new Date(c.at).toLocaleTimeString()}`));
+}
+
+// Plan limits (5-hour / weekly) from `claude /usage`; account-wide, refreshed at most every 2 minutes.
+function requestUsage(force) {
+  if (state.usage?.loading || (!force && state.usage?.at && Date.now() - state.usage.at < 120000)) return;
+  state.usage = { ...state.usage, loading: true };
+  if (!send({ type: 'usage.get' })) state.usage = { ...state.usage, loading: false, error: 'Disconnected' };
+}
+
+export function renderPlanUsage() {
+  if (panel.hidden) return;
+  requestUsage();
+  const box = document.getElementById('monitor-usage'), u = state.usage, d = u?.data;
+  box.replaceChildren();
+  if (!d) { box.append(el('p', 'ctx-note', u?.error || 'Loading…')); return; }
+  for (const lim of d.limits) {
+    const row = el('div', 'use-row'), top = el('div', 'use-top'), bar = el('div', 'use-bar'), fill = el('span');
+    top.append(el('span', '', lim.name), el('span', '', lim.resets ? `Resets ${lim.resets}` : ''), el('span', '', `${lim.percent}%`));
+    fill.style.cssText = `width:${Math.min(100, lim.percent)}%;background:${lim.percent >= 90 ? '#e5534b' : lim.percent >= 70 ? '#d99a2b' : '#5b8def'}`;
+    bar.append(fill); row.append(top, bar); box.append(row);
+  }
+  if (d.tips?.length) {
+    const det = el('details'), sum = el('summary', '', 'What uses it (last 24h)');
+    det.append(sum, ...d.tips.map(t => el('div', 'ctx-note', t)));
+    box.append(det);
+  }
+  if (u.error) box.append(el('p', 'ctx-note', `Refresh failed: ${u.error}`));
+}
+
+document.getElementById('monitor-ctx-refresh').addEventListener('click', () => { if (state.active) requestContext(state.active); requestUsage(true); });
 
 document.getElementById('monitor-copy-id').addEventListener('click', async () => {
   if (!state.active) return;

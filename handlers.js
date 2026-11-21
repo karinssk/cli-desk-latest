@@ -391,6 +391,22 @@ function onConnection(ws) {
         });
         break;
       }
+      case 'tasks.get':
+        ws.send(JSON.stringify({ type: 'tasks', id: msg.id || null, tasks: require('./tasks').list(msg.id) }));
+        break;
+      case 'usage.get':
+        require('./claude-context').claudeUsage()
+          .then(usage => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'usage', usage, at: Date.now() })),
+            err => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'usage', error: err.message })));
+        break;
+      case 'session.context.get': {
+        const s = sessions.getSessions().get(msg.id);
+        const reply = body => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'session.context', id: msg.id, ...body })); };
+        if (!s || !/claude/.test(s.presetId || '')) { reply({ error: 'Context breakdown is only available for Claude Code sessions' }); break; }
+        require('./claude-context').claudeContext(s.sessionToken, s.cwd)
+          .then(context => reply({ context, at: Date.now() }), err => reply({ error: err.message }));
+        break;
+      }
       case 'input':                sessions.input(msg); break;
       case 'clipboard.image': {
         try {

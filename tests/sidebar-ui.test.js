@@ -35,6 +35,10 @@ try {
   sidebar.renderSessionMonitor();
   check(!document.getElementById('monitor-native-team').hidden,'native helpers visible');
   check(document.querySelector('[data-native-id="native-child"] .agent-state').textContent === 'Working','native helper real status');
+  state.terms.get('one').nativeTeams[0].members.push({id:'done-child',name:'UI Reviewer',role:'Reviewer',status:'Finished',lastSeenAt:'2026-10-17T08:49:09Z'});
+  sidebar.renderSessionMonitor();
+  check([...document.querySelectorAll('.monitor-native-group')].map(row => row.textContent).join(' ').includes('History · 1'),'finished helper is separated into history');
+  check(document.querySelector('[data-native-id="done-child"] .agent-info').textContent.includes('Last report:'),'helper report time is visible');
   check(!document.querySelector('#monitor-native-members button'),'native helpers do not fake terminal links');
   state.terms.get('one').working = true;
   sidebar.renderSessionMonitor();

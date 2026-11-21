@@ -904,6 +904,7 @@ export function select(id) {
   }
   state.active = id;
   renderSessionMonitor();
+  document.dispatchEvent(new Event('clideck:active'));
   refreshTerminalInputActions();
   localStorage.setItem('clideck.activeSessionId', id);
 }

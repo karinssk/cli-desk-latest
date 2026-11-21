@@ -211,7 +211,7 @@ async function askSession(payload, sessionsApi, cfg = {}) {
   const timeoutMs = normalizeTimeout(payload.timeoutMs);
   const sinceTs = Date.now();
   const projects = Array.isArray(cfg.projects) ? cfg.projects : [];
-  const injected = `[CliDeck ask from ${sessionAddress(caller, callerId, projects)}]\n\n${message}`;
+  const injected = `[CliDeck ask from ${sessionAddress(caller, callerId, projects)}]\n\n${message}\n\n(Report format: end your final reply with "ATTACH: <path>" lines for screenshots/files in your folder, "VERDICT: PASS" or "VERDICT: CHANGES_NEEDED" if you reviewed or tested, then [CLIDECK:DONE].)`;
 
   console.log(`[ask] ${caller.name || callerId.slice(0, 8)} -> ${target.name || targetId.slice(0, 8)} (${timeoutMs}ms timeout)`);
   const cancelSubmit = submitAskInput(sessionsApi, targetId, injected);
@@ -223,7 +223,15 @@ async function askSession(payload, sessionsApi, cfg = {}) {
     toName: target.name || targetId.slice(0, 8),
   });
 
-  const response = await waitForAnswer({ sessionsApi, targetId, sinceTs, timeoutMs }).finally(cancelSubmit);
+  const tasks = require('./tasks');
+  tasks.setBroadcast(sessionsApi.broadcast);
+  const task = tasks.start({ fromId: callerId, fromName: caller.name || callerId.slice(0, 8), toId: targetId, toName: target.name || targetId.slice(0, 8),
+    project: projectName(projects, target.projectId), task: message });
+  let response;
+  try { response = await waitForAnswer({ sessionsApi, targetId, sinceTs, timeoutMs }).finally(cancelSubmit); }
+  catch (e) { tasks.finish(task.id, { error: e.message }); throw e; }
+  try { tasks.finish(task.id, { text: response, cwd: target.cwd, sessionToken: target.sessionToken, sinceTs }); }
+  catch (e) { console.error('[tasks] finish failed:', e.message); } // logging must never fail a good answer
   console.log(`[ask] completed ${target.name || targetId.slice(0, 8)} -> ${caller.name || callerId.slice(0, 8)}`);
   return { targetSessionId: targetId, targetName: target.name, response };
 }

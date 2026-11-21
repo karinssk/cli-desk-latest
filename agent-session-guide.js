@@ -10,6 +10,7 @@ Use clideck ask "<target>" "<message>" --timeout 10m to ask an idle peer agent.
 Use the exact @project/session address from clideck agents --all for cross-project asks.
 Keep clideck ask running until it exits; the answer returns on stdout.
 If a target is busy, the request is not queued. Try later or ask another idle agent.
+When you answer a [CliDeck ask], end your final reply with any "ATTACH: <path>" lines (screenshots/files inside your working folder), then "VERDICT: PASS" or "VERDICT: CHANGES_NEEDED" if you reviewed or tested something, then [CLIDECK:DONE] (or [CLIDECK:BLOCKED] / [CLIDECK:FAILED]). CliDeck shows these in its Tasks panel.
 If CLIDECK_SESSION_ID is missing, ignore this guide.`;
 
 const ROLE_BEHAVIOR = {
