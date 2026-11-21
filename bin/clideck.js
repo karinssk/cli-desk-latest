@@ -12,7 +12,7 @@ function usage() {
     '  clideck master --today [--recover --all | --recover --session <id>]',
     '  clideck ask status [--json] [--all]',
     '  clideck ask --session <name-or-id> --message <text> [--timeout 10m]',
-    '  clideck team create [preset]   Open a full agent team (default preset: coding)',
+    '  clideck team create [coding|hardware|marketing] [--project <name>]   Open a full agent team',
     '',
     'Options:',
     '  --host <host>     Host to bind. Default: 127.0.0.1. Use 0.0.0.0 for LAN access.',

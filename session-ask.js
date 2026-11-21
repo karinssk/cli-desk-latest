@@ -251,4 +251,4 @@ async function handleHttp(req, res, sessionsApi, getConfig = () => ({})) {
   }
 }
 
-module.exports = { handleHttp, askSession, askSubmitDelay };
+module.exports = { handleHttp, askSession, askSubmitDelay, resolveProject };

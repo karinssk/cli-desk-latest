@@ -57,9 +57,18 @@ async function handleHttp(req, res, sessionsApi, getConfig) {
     if (!isLoopback(req)) throw Object.assign(new Error('Local requests only'), { status: 403 });
     let body = ''; for await (const c of req) { body += c; if (body.length > 1e4) throw Object.assign(new Error('Request too large'), { status: 413 }); }
     const p = body ? JSON.parse(body) : {};
-    const caller = sessionsApi.getSessions().get(String(p.callerSessionId || ''));
-    if (!caller) throw Object.assign(new Error('Caller session is not active'), { status: 404 });
-    sendJson(res, 200, createTeam({ preset: p.preset || 'coding', projectId: caller.projectId || null, cwd: caller.cwd }, sessionsApi, getConfig()));
+    const cfg = getConfig();
+    let where;
+    if (p.project) { // --project <name-or-id>: open in that CliDeck project's folder, from anywhere
+      const project = require('./session-ask').resolveProject(Array.isArray(cfg.projects) ? cfg.projects : [], p.project);
+      if (!project.path) throw Object.assign(new Error(`Project "${project.name}" has no folder`), { status: 400 });
+      where = { projectId: project.id, cwd: project.path };
+    } else {
+      const caller = sessionsApi.getSessions().get(String(p.callerSessionId || ''));
+      if (!caller) throw Object.assign(new Error('Caller session is not active. Run inside a CliDeck session or pass --project <name>.'), { status: 404 });
+      where = { projectId: caller.projectId || null, cwd: caller.cwd };
+    }
+    sendJson(res, 200, createTeam({ preset: p.preset || 'coding', ...where }, sessionsApi, cfg));
   } catch (e) { sendJson(res, e.status || 500, { error: e.message }); }
 }
 
