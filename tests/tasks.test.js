@@ -35,4 +35,22 @@ const failed = tasks.start({ fromId: 'A', toId: 'C', task: 'x' });
 tasks.finish(failed.id, { error: 'Timed out waiting for target session response' });
 assert.equal(tasks.list('C')[0].status, 'timeout');
 assert.equal(fs.readFileSync(join(home, '.clideck', 'tasks.jsonl'), 'utf8').trim().split('\n').length, 4);
+// Background jobs: pending until a <task-id> notification for that ID arrives.
+{
+  const tok = '11111111-2222-3333-4444-555555555555', dir = join(home, '.claude', 'projects', 'p');
+  fs.mkdirSync(dir, { recursive: true });
+  const at = t => new Date(t).toISOString(), f = join(dir, `${tok}.jsonl`);
+  const lines = [
+    { type: 'user', timestamp: at(500), m: 'Command running in background with ID: old1' }, // before sinceTs: ignored
+    { type: 'user', timestamp: at(2000), m: 'Command running in background with ID: b1' },
+    { type: 'user', timestamp: at(2001), m: 'Async agent launched successfully.\nagentId: a1 (internal)' },
+  ];
+  fs.writeFileSync(f, lines.map(l => JSON.stringify(l)).join('\n') + '\n');
+  assert.equal(tasks.claudePendingBackground(tok, 1000), 2);
+  fs.appendFileSync(f, JSON.stringify({ type: 'queue-operation', timestamp: at(3000), content: '<task-notification>\n<task-id>b1</task-id>' }) + '\n');
+  assert.equal(tasks.claudePendingBackground(tok, 1000), 1);
+  fs.appendFileSync(f, JSON.stringify({ type: 'user', timestamp: at(4000), content: '<task-id>a1</task-id>' }) + '\n');
+  assert.equal(tasks.claudePendingBackground(tok, 1000), 0);
+  assert.equal(tasks.claudePendingBackground('not-a-token', 0), 0);
+}
 console.log('tasks checks passed');

@@ -157,6 +157,8 @@ function waitForAnswer({ sessionsApi, targetId, sinceTs, timeoutMs }) {
     };
     const finish = () => {
       if (settled) return;
+      // Still waiting on its own background jobs (e.g. an Orchestrator waiting on Devs): the next turn has the real answer.
+      try { if (require('./tasks').claudePendingBackground(sessions.get(targetId)?.sessionToken, sinceTs)) return; } catch {}
       const response = latestAnswerTextSince(sessions, targetId, sinceTs);
       if (!response) return;
       settled = true;

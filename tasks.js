@@ -59,24 +59,27 @@ function parseReport(text, cwd) {
   return { report: kept.join('\n').trim(), verdict, marker, files, notes };
 }
 
-// The last assistant text in a Claude Code session after `sinceTs`, read from its own transcript:
-// clean markdown, unlike text scraped from the terminal screen.
-function claudeReplySince(sessionToken, sinceTs) {
-  if (!/^[0-9a-f-]{36}$/i.test(sessionToken || '')) return '';
+// Last 2 MiB of a Claude Code transcript as lines (the end is what matters; big files would block the server).
+function transcriptTail(sessionToken) {
+  if (!/^[0-9a-f-]{36}$/i.test(sessionToken || '')) return [];
   const root = join(os.homedir(), '.claude', 'projects');
   let file = null;
   try { for (const d of fs.readdirSync(root)) { const f = join(root, d, `${sessionToken}.jsonl`); if (fs.existsSync(f)) { file = f; break; } } } catch {}
-  if (!file) return '';
-  let last = '', tail = '';
-  // Only the last 2 MiB: the reply is at the end, and big transcripts would block the server.
+  if (!file) return [];
   const fd = fs.openSync(file, 'r');
   try {
     const size = fs.fstatSync(fd).size, n = Math.min(size, 2 << 20), buf = Buffer.alloc(n);
     fs.readSync(fd, buf, 0, n, size - n);
-    tail = buf.toString('utf8');
-    if (n < size) tail = tail.slice(tail.indexOf('\n') + 1);
+    const tail = buf.toString('utf8');
+    return (n < size ? tail.slice(tail.indexOf('\n') + 1) : tail).split('\n');
   } finally { fs.closeSync(fd); }
-  for (const line of tail.split('\n')) {
+}
+
+// The last assistant text in a Claude Code session after `sinceTs`, read from its own transcript:
+// clean markdown, unlike text scraped from the terminal screen.
+function claudeReplySince(sessionToken, sinceTs) {
+  let last = '';
+  for (const line of transcriptTail(sessionToken)) {
     if (!line.includes('"assistant"')) continue;
     let j; try { j = JSON.parse(line); } catch { continue; }
     if (j.type !== 'assistant' || Date.parse(j.timestamp) < sinceTs) continue;
@@ -84,6 +87,21 @@ function claudeReplySince(sessionToken, sinceTs) {
     if (text) last = text;
   }
   return last;
+}
+
+// Background jobs (Bash run_in_background, async subagents) started after `sinceTs` with no completion
+// notification yet. An Orchestrator ends its turn while Devs work; its real answer comes after these finish.
+function claudePendingBackground(sessionToken, sinceTs) {
+  const started = new Set(), ended = new Set();
+  for (const line of transcriptTail(sessionToken)) {
+    const launched = line.match(/running in background with ID: ([A-Za-z0-9_-]+)|agentId: ([A-Za-z0-9_-]+)/g);
+    const done = line.match(/<task-id>[A-Za-z0-9_-]+<\/task-id>/g);
+    if (!launched && !done) continue;
+    let ts; try { ts = Date.parse(JSON.parse(line).timestamp); } catch { continue; }
+    if (launched && ts >= sinceTs) for (const m of launched) started.add(m.split(/: /).pop());
+    if (done) for (const m of done) ended.add(m.slice(9, -10));
+  }
+  return [...started].filter(id => !ended.has(id)).length;
 }
 
 function start({ fromId, fromName, toId, toName, project, task }) {
@@ -103,4 +121,4 @@ function finish(id, { text, error, cwd, sessionToken, sinceTs }) {
 const list = sessionId => [...tasks.values()].filter(t => !sessionId || t.fromId === sessionId || t.toId === sessionId).slice(-100).reverse().map(publicTask);
 const filePath = (id, n) => tasks.get(id)?.files?.[n]?.path || null;
 
-module.exports = { start, finish, list, filePath, parseReport, setBroadcast, claudeReplySince };
+module.exports = { start, finish, list, filePath, parseReport, setBroadcast, claudeReplySince, claudePendingBackground };
