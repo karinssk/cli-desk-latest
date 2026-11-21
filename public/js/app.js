@@ -13,7 +13,7 @@ import './nav.js';
 import { initDrag, wasDragging } from './drag.js';
 import { registerHotkey, unregisterHotkey, unregisterAllForPlugin } from './hotkeys.js';
 import { renderPrompts } from './prompts.js';
-import { setTasks, updateTask } from './task-pane.js';
+import { setTasks, updateTask, reloadTasks } from './task-pane.js';
 
 const shownAgentHealthToasts = new Set();
 let reconnectReplaySkip = null;
@@ -63,6 +63,7 @@ function connect() {
     setServerConnectionState(true);
     flushQueuedSends();
     send({ type: 'remote.status', forceUpdate: true });
+    reloadTasks(); // tasks.get isn't queued while offline, and updates were missed meanwhile
   };
 
   state.ws.onmessage = ({ data }) => {

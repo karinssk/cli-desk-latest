@@ -87,6 +87,7 @@ export function renderTaskPane() {
 
 export function setTasks(arr) { for (const t of arr || []) tasks.set(t.id, t); loaded = true; renderTaskPane(); }
 export function updateTask(t) { tasks.set(t.id, t); renderTaskPane(); }
+export function reloadTasks() { loaded = false; if (!pane.hidden) send({ type: 'tasks.get' }); }
 
 function setOpen(open) {
   pane.hidden = !open;

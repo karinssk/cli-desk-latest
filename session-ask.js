@@ -232,6 +232,8 @@ async function askSession(payload, sessionsApi, cfg = {}) {
   catch (e) { tasks.finish(task.id, { error: e.message }); throw e; }
   try { tasks.finish(task.id, { text: response, cwd: target.cwd, sessionToken: target.sessionToken, sinceTs }); }
   catch (e) { console.error('[tasks] finish failed:', e.message); } // logging must never fail a good answer
+  // Claude targets: hand back the reply from the session transcript, not text scraped from the terminal screen.
+  try { response = tasks.claudeReplySince(target.sessionToken, sinceTs) || response; } catch {}
   console.log(`[ask] completed ${target.name || targetId.slice(0, 8)} -> ${caller.name || callerId.slice(0, 8)}`);
   return { targetSessionId: targetId, targetName: target.name, response };
 }

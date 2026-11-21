@@ -103,4 +103,4 @@ function finish(id, { text, error, cwd, sessionToken, sinceTs }) {
 const list = sessionId => [...tasks.values()].filter(t => !sessionId || t.fromId === sessionId || t.toId === sessionId).slice(-100).reverse().map(publicTask);
 const filePath = (id, n) => tasks.get(id)?.files?.[n]?.path || null;
 
-module.exports = { start, finish, list, filePath, parseReport, setBroadcast };
+module.exports = { start, finish, list, filePath, parseReport, setBroadcast, claudeReplySince };
