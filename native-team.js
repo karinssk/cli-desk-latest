@@ -1,11 +1,42 @@
 const { readFile } = require('node:fs/promises');
-const { join } = require('node:path');
+const { join, sep } = require('node:path');
 const { homedir } = require('node:os');
-const { existsSync } = require('node:fs');
+const { existsSync, realpathSync, openSync, closeSync, fstatSync, readSync } = require('node:fs');
 const { sendJson, isLoopback } = require('./http-util');
 
 const label = value => typeof value === 'string' ? value.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200) : '';
 const uuid = value => /^[0-9a-f-]{36}$/i.test(value || '');
+
+function rolloutStatus(file, codexHome, now = Date.now()) {
+  if (!file || !realpathSync(file).startsWith(realpathSync(join(codexHome, 'sessions')) + sep)) return null;
+  const fd = openSync(file, 'r');
+  try {
+    const stat = fstatSync(fd);
+    // ponytail: inspect only the latest 1 MiB; a longer silent turn stays Unknown
+    // until Codex exposes a direct live status feed or a persistent event index.
+    const size = Math.min(stat.size, 1024 * 1024);
+    const buffer = Buffer.alloc(size);
+    let read = 0;
+    while (read < size) {
+      const bytes = readSync(fd, buffer, read, size - read, stat.size - size + read);
+      if (!bytes) break;
+      read += bytes;
+    }
+    const lines = buffer.toString('utf8', 0, read).split('\n');
+    if (size < stat.size) lines.shift();
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let event;
+      try { event = JSON.parse(lines[i]); } catch { continue; }
+      if (event.type !== 'event_msg') continue;
+      if (event.payload?.type === 'task_complete') return { status: 'Finished', lastSeenAt: event.timestamp };
+      if (event.payload?.type === 'task_started') return {
+        status: now - stat.mtimeMs <= 30000 ? 'Working' : 'Unknown',
+        lastSeenAt: new Date(stat.mtimeMs).toISOString(),
+      };
+    }
+  } finally { closeSync(fd); }
+  return null;
+}
 
 function artifactMembers(rootId, codexHome = join(homedir(), '.codex')) {
   if (!uuid(rootId)) return [];
@@ -20,14 +51,16 @@ function artifactMembers(rootId, codexHome = join(homedir(), '.codex')) {
       const rows = db.prepare(`WITH RECURSIVE children(id) AS (
         SELECT child_thread_id FROM thread_spawn_edges WHERE parent_thread_id = ?
         UNION SELECT e.child_thread_id FROM thread_spawn_edges e JOIN children c ON e.parent_thread_id = c.id
-      ) SELECT c.id, t.agent_nickname, t.agent_role, t.agent_path, t.model, t.reasoning_effort, t.updated_at_ms
+      ) SELECT c.id, t.agent_nickname, t.agent_role, t.agent_path, t.model, t.reasoning_effort, t.rollout_path
         FROM children c LEFT JOIN threads t ON t.id = c.id`).all(rootId);
       for (const row of rows) {
         if (!uuid(row.id) || row.id === rootId || members.has(row.id)) continue;
+        let activity = null;
+        try { activity = rolloutStatus(row.rollout_path, codexHome); } catch { /* Keep unknown when a rollout is unavailable. */ }
         members.set(row.id, { id: row.id, name: label(row.agent_path?.split('/').pop() || row.agent_nickname || row.id.slice(0, 8)),
           role: label(row.agent_role) || 'Native helper', model: label(row.model), reasoning: label(row.reasoning_effort),
-          status: 'Unknown', task: '', source: 'Codex recorded metadata (not model attestation)',
-          lastSeenAt: Number.isSafeInteger(row.updated_at_ms) ? new Date(row.updated_at_ms).toISOString() : null });
+          status: activity?.status || 'Unknown', task: '', source: activity ? 'Codex turn events' : 'Codex recorded metadata (not model attestation)',
+          lastSeenAt: activity?.lastSeenAt || null });
       }
     } finally { db.close(); }
   }
@@ -35,7 +68,16 @@ function artifactMembers(rootId, codexHome = join(homedir(), '.codex')) {
 }
 
 function mergeArtifacts(teams, members) {
-  const registered = new Set(teams.flatMap(team => team.members.map(member => member.id)));
+  const recorded = new Map(members.map(member => [member.id, member]));
+  const registered = new Set(teams.flatMap(team => team.members.map(member => {
+    const artifact = recorded.get(member.id);
+    if (member.status === 'Unknown' && artifact && artifact.status !== 'Unknown') {
+      member.status = artifact.status;
+      member.lastSeenAt = artifact.lastSeenAt;
+      member.source = artifact.source;
+    }
+    return member.id;
+  })));
   const extra = members.filter(member => !registered.has(member.id));
   return extra.length ? [...teams, { id: 'native-history', name: 'Native spawn history', members: extra }] : teams;
 }
