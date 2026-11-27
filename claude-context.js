@@ -90,7 +90,10 @@ function startUsagePush(sessionsApi) {
     timer = null;
     if (![...sessionsApi.clients].some(c => c.readyState === 1)) return;
     last = Date.now();
-    claudeUsage(15000).then(usage => sessionsApi.broadcast({ type: 'usage', usage, at: Date.now() }), () => {});
+    claudeUsage(15000).then(usage => {
+      sessionsApi.broadcast({ type: 'usage', usage, at: Date.now() });
+      require('./fable-fallback').syncFableModel(sessionsApi, usage); // idle Fable members follow the weekly limit
+    }, () => {});
   };
   const schedule = delay => { if (!timer) timer = setTimeout(push, Math.max(delay, last + 20000 - Date.now())); };
   sessionsApi.addBroadcastListener(msg => {

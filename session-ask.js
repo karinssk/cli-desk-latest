@@ -211,9 +211,16 @@ async function askSession(payload, sessionsApi, cfg = {}) {
   if (!message) throw jsonError('Message is required');
 
   const timeoutMs = normalizeTimeout(payload.timeoutMs);
+  let note = '';
+  const fable = require('./fable-fallback');
+  if (fable.isFableMember(target)) { // Fable near its weekly limit: switch this member to Opus before the task
+    const usage = await require('./claude-context').claudeUsage(60000).catch(() => null);
+    if (fable.syncFableModel(sessionsApi, usage, targetId).length) await new Promise(r => setTimeout(r, 2000));
+    note = fable.quotaNote(usage);
+  }
   const sinceTs = Date.now();
   const projects = Array.isArray(cfg.projects) ? cfg.projects : [];
-  const injected = `[CliDeck ask from ${sessionAddress(caller, callerId, projects)}]\n\n${message}\n\n(Report format: end your final reply with "ATTACH: <path>" lines for screenshots/files in your folder, "VERDICT: PASS" or "VERDICT: CHANGES_NEEDED" if you reviewed or tested, then [CLIDECK:DONE].)`;
+  const injected = `[CliDeck ask from ${sessionAddress(caller, callerId, projects)}]\n\n${message}${note ? `\n\n${note}` : ''}\n\n(Report format: end your final reply with "ATTACH: <path>" lines for screenshots/files in your folder, "VERDICT: PASS" or "VERDICT: CHANGES_NEEDED" if you reviewed or tested, then [CLIDECK:DONE].)`;
 
   console.log(`[ask] ${caller.name || callerId.slice(0, 8)} -> ${target.name || targetId.slice(0, 8)} (${timeoutMs}ms timeout)`);
   const cancelSubmit = submitAskInput(sessionsApi, targetId, injected);

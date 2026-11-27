@@ -16,7 +16,8 @@ const PRESETS = {
   ],
   hardware: [
     { name: 'Orchestrator', role: 'Orchestrator', model: 'opus' },
-    { name: 'Volt', role: 'Electronics', model: 'fable', persona: 'engineering-electronics-pcb-engineer' },
+    { name: 'Volt', role: 'Electronics', model: 'fable', effort: 'high', persona: 'engineering-electronics-pcb-engineer',
+      note: 'Before delivering a schematic or PCB meant for fabrication: run KiCad ERC/DRC, then have a fresh reviewer subagent (model fable) check it, and fix what it finds (at most 2 rounds). Check every part number and pinout against its datasheet.' },
     { name: 'Forge', role: 'Mechanical', model: 'sonnet', persona: 'engineering-mechanical-3d-designer' },
   ],
   marketing: [
@@ -43,7 +44,7 @@ function createTeam({ preset = 'coding', projectId = null, cwd } = {}, sessionsA
   let parent = null;
   for (const m of members) {
     const name = taken.has(m.name.toLowerCase()) ? `${m.name} ${teamId.slice(-4)}` : m.name;
-    const r = sessionsApi.createProgrammatic({ presetId: 'claude-code', name, projectId, cwd, args: ['--model', m.model, ...(m.persona ? ['--append-system-prompt', `${MEMBER_NOTE}\n\n${persona(m.persona)}`] : [])], env: TEAM_ENV,
+    const r = sessionsApi.createProgrammatic({ presetId: 'claude-code', name, projectId, cwd, args: ['--model', m.model, ...(m.effort ? ['--effort', m.effort] : []), ...(m.persona ? ['--append-system-prompt', [MEMBER_NOTE, m.note, persona(m.persona)].filter(Boolean).join('\n\n')] : [])], env: TEAM_ENV,
       details: { teamId, role: m.role, parentSessionId: parent, currentTask: '' } }, cfg);
     if (r.error) throw Object.assign(new Error(`${name}: ${r.error}${created.length ? ` (already opened: ${created.map(c => c.name).join(', ')})` : ''}`), { status: 409 });
     created.push({ id: r.id, name, role: m.role, model: m.model });
