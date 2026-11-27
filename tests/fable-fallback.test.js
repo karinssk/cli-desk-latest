@@ -1,5 +1,9 @@
 // fable-fallback.js: Fable members go to Opus at >=80% weekly Fable use, back after reset; idle only.
 const assert = require('node:assert/strict');
+const fs = require('fs'), os = require('os'), path = require('path');
+process.env.CLAUDE_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ff-'));
+const settings = path.join(process.env.CLAUDE_CONFIG_DIR, 'settings.json');
+fs.writeFileSync(settings, JSON.stringify({ model: 'claude-opus-5-5', other: 1 }));
 const f = require('../fable-fallback');
 
 const usage = pct => ({ limits: [{ name: 'Weekly · all models', percent: 10 }, { name: 'Weekly · Fable', percent: pct }] });
@@ -24,5 +28,9 @@ assert.deepEqual(f.syncFableModel(api, { limits: [] }), []);            // no Fa
 assert.equal(f.quotaNote(usage(50)), '');
 assert.match(f.quotaNote(usage(85)), /Fable subagent only for the final review/);
 assert.match(f.quotaNote(usage(96)), /Do not use Fable/);
-console.log('fable-fallback tests passed');
-setTimeout(() => process.exit(0), 500); // let the pending Enter timers fire
+fs.writeFileSync(settings, JSON.stringify({ model: 'fable', other: 1 })); // what `/model fable` saves
+setTimeout(() => { // default for new sessions put back, other settings kept
+  assert.deepEqual(JSON.parse(fs.readFileSync(settings, 'utf8')), { model: 'claude-opus-5-5', other: 1 });
+  console.log('fable-fallback tests passed');
+  process.exit(0);
+}, 3500);
